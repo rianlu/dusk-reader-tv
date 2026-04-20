@@ -111,6 +111,27 @@ dependencies {
     // Baseline profile installer
     implementation(libs.androidx.profileinstaller)
 
+    // Coroutines
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.android)
+
+    // Room
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+
+    // Ktor server (file transfer)
+    implementation(libs.ktor.server.core)
+    implementation(libs.ktor.server.netty)
+    implementation(libs.ktor.server.html.builder)
+
+    // QR code
+    implementation(libs.zxing.core)
+
     // Compose Previews
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    // Unit tests
+    testImplementation(libs.junit4)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
