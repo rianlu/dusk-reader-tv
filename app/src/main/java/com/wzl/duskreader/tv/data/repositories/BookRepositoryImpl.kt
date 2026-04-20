@@ -16,6 +16,7 @@ class BookRepositoryImpl @Inject constructor(
 ) : BookRepository {
 
     companion object {
+        private const val TAG = "BookRepo"
         private val SUPPORTED_EXTENSIONS = setOf("txt", "epub")
         private const val BOOK_DIR_NAME = "暮阅"
     }
@@ -54,6 +55,7 @@ class BookRepositoryImpl @Inject constructor(
                 importedCount++
             }
         }
+        android.util.Log.d(TAG, "scan done: dir=$bookDir, files=${files.size}, imported=$importedCount")
         importedCount
     }
 
