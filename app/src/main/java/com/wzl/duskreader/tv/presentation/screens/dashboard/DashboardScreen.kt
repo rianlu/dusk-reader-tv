@@ -1,19 +1,3 @@
-/*
- * Copyright 2023 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.wzl.duskreader.tv.presentation.screens.dashboard
 
 import androidx.compose.animation.core.animateDpAsState
@@ -56,15 +40,11 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.wzl.duskreader.tv.data.entities.Movie
 import com.wzl.duskreader.tv.presentation.screens.Screens
-import com.wzl.duskreader.tv.presentation.screens.categories.CategoriesScreen
-import com.wzl.duskreader.tv.presentation.screens.favourites.FavouritesScreen
 import com.wzl.duskreader.tv.presentation.screens.home.HomeScreen
-import com.wzl.duskreader.tv.presentation.screens.movies.MoviesScreen
-import com.wzl.duskreader.tv.presentation.screens.profile.ProfileScreen
-import com.wzl.duskreader.tv.presentation.screens.search.SearchScreen
-import com.wzl.duskreader.tv.presentation.screens.shows.ShowsScreen
+import com.wzl.duskreader.tv.presentation.screens.library.LibraryScreen
+import com.wzl.duskreader.tv.presentation.screens.settings.SettingsScreen
+import com.wzl.duskreader.tv.presentation.screens.transfer.TransferScreen
 import com.wzl.duskreader.tv.presentation.utils.Padding
 
 val ParentPadding = PaddingValues(vertical = 16.dp, horizontal = 58.dp)
@@ -83,12 +63,10 @@ fun rememberChildPadding(direction: LayoutDirection = LocalLayoutDirection.curre
 
 @Composable
 fun DashboardScreen(
-    openCategoryMovieList: (categoryId: String) -> Unit,
-    openMovieDetailsScreen: (movieId: String) -> Unit,
-    openVideoPlayer: (Movie) -> Unit,
+    openBookDetailsScreen: (bookId: Long) -> Unit,
     isComingBackFromDifferentScreen: Boolean,
     resetIsComingBackFromDifferentScreen: () -> Unit,
-    onBackPressed: () -> Unit
+    onBackPressed: () -> Unit,
 ) {
     val density = LocalDensity.current
     val focusManager = LocalFocusManager.current
@@ -117,27 +95,20 @@ fun DashboardScreen(
     }
 
     BackPressHandledArea(
-        // 1. On user's first back press, bring focus to the current selected tab, if TopBar is not
-        //    visible, first make it visible, then focus the selected tab
-        // 2. On second back press, bring focus back to the first displayed tab
-        // 3. On third back press, exit the app
         onBackPressed = {
             if (!isTopBarVisible) {
                 isTopBarVisible = true
-                TopBarFocusRequesters[currentTopBarSelectedTabIndex + 1].requestFocus()
+                TopBarFocusRequesters[currentTopBarSelectedTabIndex].requestFocus()
             } else if (currentTopBarSelectedTabIndex == 0) onBackPressed()
             else if (!isTopBarFocused) {
-                TopBarFocusRequesters[currentTopBarSelectedTabIndex + 1].requestFocus()
-            } else TopBarFocusRequesters[1].requestFocus()
+                TopBarFocusRequesters[currentTopBarSelectedTabIndex].requestFocus()
+            } else TopBarFocusRequesters[0].requestFocus()
         }
     ) {
-        // We do not want to focus the TopBar everytime we come back from another screen e.g.
-        // MovieDetails, CategoryMovieList or VideoPlayer screen
         var wasTopBarFocusRequestedBefore by rememberSaveable { mutableStateOf(false) }
 
         var topBarHeightPx: Int by rememberSaveable { mutableIntStateOf(0) }
 
-        // Used to show/hide DashboardTopBar
         val topBarYOffsetPx by animateIntAsState(
             targetValue = if (isTopBarVisible) 0 else -topBarHeightPx,
             animationSpec = tween(),
@@ -150,7 +121,6 @@ fun DashboardScreen(
             }
         )
 
-        // Used to push down/pull up NavHost when DashboardTopBar is shown/hidden
         val navHostTopPaddingDp by animateDpAsState(
             targetValue = if (isTopBarVisible) with(density) { topBarHeightPx.toDp() } else 0.dp,
             animationSpec = tween(),
@@ -159,7 +129,7 @@ fun DashboardScreen(
 
         LaunchedEffect(Unit) {
             if (!wasTopBarFocusRequestedBefore) {
-                TopBarFocusRequesters[currentTopBarSelectedTabIndex + 1].requestFocus()
+                TopBarFocusRequesters[currentTopBarSelectedTabIndex].requestFocus()
                 wasTopBarFocusRequestedBefore = true
             }
         }
@@ -190,9 +160,7 @@ fun DashboardScreen(
         }
 
         Body(
-            openCategoryMovieList = openCategoryMovieList,
-            openMovieDetailsScreen = openMovieDetailsScreen,
-            openVideoPlayer = openVideoPlayer,
+            openBookDetailsScreen = openBookDetailsScreen,
             updateTopBarVisibility = { isTopBarVisible = it },
             isTopBarVisible = isTopBarVisible,
             navController = navController,
@@ -223,9 +191,7 @@ private fun BackPressHandledArea(
 
 @Composable
 private fun Body(
-    openCategoryMovieList: (categoryId: String) -> Unit,
-    openMovieDetailsScreen: (movieId: String) -> Unit,
-    openVideoPlayer: (Movie) -> Unit,
+    openBookDetailsScreen: (bookId: Long) -> Unit,
     updateTopBarVisibility: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
@@ -236,50 +202,24 @@ private fun Body(
         navController = navController,
         startDestination = Screens.Home(),
     ) {
-        composable(Screens.Profile()) {
-            ProfileScreen()
-        }
         composable(Screens.Home()) {
             HomeScreen(
-                onMovieClick = { selectedMovie ->
-                    openMovieDetailsScreen(selectedMovie.id)
-                },
-                goToVideoPlayer = openVideoPlayer,
+                onBookClick = { book -> openBookDetailsScreen(book.id) },
                 onScroll = updateTopBarVisibility,
-                isTopBarVisible = isTopBarVisible
+                isTopBarVisible = isTopBarVisible,
             )
         }
-        composable(Screens.Categories()) {
-            CategoriesScreen(
-                onCategoryClick = openCategoryMovieList,
-                onScroll = updateTopBarVisibility
-            )
-        }
-        composable(Screens.Movies()) {
-            MoviesScreen(
-                onMovieClick = { movie -> openMovieDetailsScreen(movie.id) },
+        composable(Screens.Library()) {
+            LibraryScreen(
+                onBookClick = { book -> openBookDetailsScreen(book.id) },
                 onScroll = updateTopBarVisibility,
-                isTopBarVisible = isTopBarVisible
+                isTopBarVisible = isTopBarVisible,
             )
         }
-        composable(Screens.Shows()) {
-            ShowsScreen(
-                onTVShowClick = { movie -> openMovieDetailsScreen(movie.id) },
-                onScroll = updateTopBarVisibility,
-                isTopBarVisible = isTopBarVisible
-            )
+        composable(Screens.Transfer()) {
+            TransferScreen()
         }
-        composable(Screens.Favourites()) {
-            FavouritesScreen(
-                onMovieClick = openMovieDetailsScreen,
-                onScroll = updateTopBarVisibility,
-                isTopBarVisible = isTopBarVisible
-            )
-        }
-        composable(Screens.Search()) {
-            SearchScreen(
-                onMovieClick = { movie -> openMovieDetailsScreen(movie.id) },
-                onScroll = updateTopBarVisibility
-            )
+        composable(Screens.Settings()) {
+            SettingsScreen()
         }
     }

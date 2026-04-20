@@ -1,19 +1,3 @@
-/*
- * Copyright 2023 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.wzl.duskreader.tv.presentation
 
 import androidx.compose.runtime.Composable
@@ -27,14 +11,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.wzl.duskreader.tv.presentation.screens.Screens
-import com.wzl.duskreader.tv.presentation.screens.categories.CategoryMovieListScreen
+import com.wzl.duskreader.tv.presentation.screens.bookDetails.BookDetailsScreen
 import com.wzl.duskreader.tv.presentation.screens.dashboard.DashboardScreen
-import com.wzl.duskreader.tv.presentation.screens.movies.MovieDetailsScreen
-import com.wzl.duskreader.tv.presentation.screens.videoPlayer.VideoPlayerScreen
+import com.wzl.duskreader.tv.presentation.screens.reader.ReaderScreen
 
 @Composable
 fun App(
-    onBackPressed: () -> Unit
+    onBackPressed: () -> Unit,
 ) {
 
     val navController = rememberNavController()
@@ -45,68 +28,28 @@ fun App(
         startDestination = Screens.Dashboard(),
         builder = {
             composable(
-                route = Screens.CategoryMovieList(),
+                route = Screens.BookDetails(),
                 arguments = listOf(
-                    navArgument(CategoryMovieListScreen.CategoryIdBundleKey) {
+                    navArgument(BookDetailsScreen.BookIdBundleKey) {
                         type = NavType.StringType
                     }
                 )
             ) {
-                CategoryMovieListScreen(
+                BookDetailsScreen(
                     onBackPressed = {
                         if (navController.navigateUp()) {
                             isComingBackFromDifferentScreen = true
                         }
                     },
-                    onMovieSelected = { movie ->
-                        navController.navigate(
-                            Screens.MovieDetails.withArgs(movie.id)
-                        )
-                    }
-                )
-            }
-            composable(
-                route = Screens.MovieDetails(),
-                arguments = listOf(
-                    navArgument(MovieDetailsScreen.MovieIdBundleKey) {
-                        type = NavType.StringType
-                    }
-                )
-            ) {
-                MovieDetailsScreen(
-                    goToMoviePlayer = {
-                        navController.navigate(Screens.VideoPlayer())
-                    },
-                    refreshScreenWithNewMovie = { movie ->
-                        navController.navigate(
-                            Screens.MovieDetails.withArgs(movie.id)
-                        ) {
-                            popUpTo(Screens.MovieDetails()) {
-                                inclusive = true
-                            }
-                        }
-                    },
-                    onBackPressed = {
-                        if (navController.navigateUp()) {
-                            isComingBackFromDifferentScreen = true
-                        }
+                    onStartReading = { book ->
+                        navController.navigate(Screens.Reader.withArgs(book.id))
                     }
                 )
             }
             composable(route = Screens.Dashboard()) {
                 DashboardScreen(
-                    openCategoryMovieList = { categoryId ->
-                        navController.navigate(
-                            Screens.CategoryMovieList.withArgs(categoryId)
-                        )
-                    },
-                    openMovieDetailsScreen = { movieId ->
-                        navController.navigate(
-                            Screens.MovieDetails.withArgs(movieId)
-                        )
-                    },
-                    openVideoPlayer = {
-                        navController.navigate(Screens.VideoPlayer())
+                    openBookDetailsScreen = { bookId ->
+                        navController.navigate(Screens.BookDetails.withArgs(bookId))
                     },
                     onBackPressed = onBackPressed,
                     isComingBackFromDifferentScreen = isComingBackFromDifferentScreen,
@@ -115,8 +58,15 @@ fun App(
                     }
                 )
             }
-            composable(route = Screens.VideoPlayer()) {
-                VideoPlayerScreen(
+            composable(
+                route = Screens.Reader(),
+                arguments = listOf(
+                    navArgument(ReaderScreen.BookIdBundleKey) {
+                        type = NavType.StringType
+                    }
+                )
+            ) {
+                ReaderScreen(
                     onBackPressed = {
                         if (navController.navigateUp()) {
                             isComingBackFromDifferentScreen = true

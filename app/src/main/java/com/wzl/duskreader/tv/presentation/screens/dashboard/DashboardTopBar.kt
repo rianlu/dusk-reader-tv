@@ -1,22 +1,7 @@
-/*
- * Copyright 2023 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.wzl.duskreader.tv.presentation.screens.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,7 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -43,9 +28,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
@@ -54,8 +36,6 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Tab
 import androidx.tv.material3.TabRow
 import androidx.tv.material3.Text
-import com.wzl.duskreader.tv.R
-import com.wzl.duskreader.tv.data.util.StringConstants
 import com.wzl.duskreader.tv.presentation.screens.Screens
 import com.wzl.duskreader.tv.presentation.theme.IconSize
 import com.wzl.duskreader.tv.presentation.theme.JetStreamCardShape
@@ -64,10 +44,7 @@ import com.wzl.duskreader.tv.presentation.utils.occupyScreenSize
 
 val TopBarTabs = Screens.entries.toList().filter { it.isTabItem }
 
-// +1 for ProfileTab
-val TopBarFocusRequesters = List(size = TopBarTabs.size + 1) { FocusRequester() }
-
-private const val PROFILE_SCREEN_INDEX = -1
+val TopBarFocusRequesters = List(size = TopBarTabs.size) { FocusRequester() }
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -76,7 +53,7 @@ fun DashboardTopBar(
     selectedTabIndex: Int,
     screens: List<Screens> = TopBarTabs,
     focusRequesters: List<FocusRequester> = remember { TopBarFocusRequesters },
-    onScreenSelection: (screen: Screens) -> Unit
+    onScreenSelection: (screen: Screens) -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
     Box(modifier = modifier) {
@@ -86,27 +63,11 @@ fun DashboardTopBar(
                 .padding(top = 16.dp)
                 .background(MaterialTheme.colorScheme.surface)
                 .focusRestorer(),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            UserAvatar(
-                modifier = Modifier
-                    .size(32.dp)
-                    .focusRequester(focusRequesters[0])
-                    .semantics {
-                        contentDescription =
-                            StringConstants.Composable.ContentDescription.UserAvatar
-                    },
-                selected = selectedTabIndex == PROFILE_SCREEN_INDEX,
-                onClick = {
-                    onScreenSelection(Screens.Profile)
-                }
-            )
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 var isTabRowFocused by remember { mutableStateOf(false) }
 
-                Spacer(modifier = Modifier.width(20.dp))
                 TabRow(
                     modifier = Modifier
                         .onFocusChanged {
@@ -118,48 +79,30 @@ fun DashboardTopBar(
                             DashboardTopBarItemIndicator(
                                 currentTabPosition = tabPositions[selectedTabIndex],
                                 anyTabFocused = isTabRowFocused,
-                                shape = JetStreamCardShape
+                                shape = JetStreamCardShape,
                             )
                         }
                     },
-                    separator = { Spacer(modifier = Modifier) }
+                    separator = { Spacer(modifier = Modifier) },
                 ) {
                     screens.forEachIndexed { index, screen ->
                         key(index) {
                             Tab(
                                 modifier = Modifier
-                                    .height(32.dp)
-                                    .focusRequester(focusRequesters[index + 1]),
+                                    .height(40.dp)
+                                    .focusRequester(focusRequesters[index]),
                                 selected = index == selectedTabIndex,
                                 onFocus = { onScreenSelection(screen) },
                                 onClick = { focusManager.moveFocus(FocusDirection.Down) },
                             ) {
-                                if (screen.tabIcon != null) {
-                                    Icon(
-                                        screen.tabIcon,
-                                        modifier = Modifier.padding(4.dp),
-                                        contentDescription = StringConstants.Composable
-                                            .ContentDescription.DashboardSearchButton,
-                                        tint = LocalContentColor.current
-                                    )
-                                } else {
-                                    Text(
-                                        modifier = Modifier
-                                            .occupyScreenSize()
-                                            .padding(horizontal = 16.dp),
-                                        text = screen(),
-                                        style = MaterialTheme.typography.titleSmall.copy(
-                                            color = LocalContentColor.current
-                                        )
-                                    )
-                                }
+                                TabContent(screen = screen)
                             }
                         }
                     }
                 }
             }
             Spacer(modifier = Modifier.weight(1f))
-            JetStreamLogo(
+            DuskReaderLogo(
                 modifier = Modifier
                     .alpha(0.75f)
                     .padding(end = 8.dp),
@@ -169,26 +112,52 @@ fun DashboardTopBar(
 }
 
 @Composable
-private fun JetStreamLogo(
-    modifier: Modifier = Modifier
+private fun TabContent(screen: Screens) {
+    Row(
+        modifier = Modifier
+            .occupyScreenSize()
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        screen.tabIcon?.let {
+            Icon(
+                imageVector = it,
+                contentDescription = null,
+                tint = LocalContentColor.current,
+                modifier = Modifier.size(IconSize),
+            )
+        }
+        val label = screen.tabLabel ?: screen()
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleSmall.copy(
+                color = LocalContentColor.current,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun DuskReaderLogo(
+    modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            Icons.Default.PlayCircle,
-            contentDescription = StringConstants.Composable
-                .ContentDescription.BrandLogoImage,
+            Icons.Outlined.AutoStories,
+            contentDescription = null,
             modifier = Modifier
-                .padding(end = 4.dp)
-                .size(IconSize)
+                .padding(end = 6.dp)
+                .size(IconSize),
         )
         Text(
-            text = stringResource(R.string.brand_logo_text),
+            text = "暮阅",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Medium,
-            fontFamily = LexendExa
+            fontFamily = LexendExa,
         )
     }
 }

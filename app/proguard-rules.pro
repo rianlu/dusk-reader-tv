@@ -19,3 +19,7 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Ktor / Netty —— BlockHound 是 Netty 的可选 runtime 集成，不存在也没关系
+-dontwarn reactor.blockhound.**
+-dontwarn io.netty.util.internal.Hidden$NettyBlockHoundIntegration

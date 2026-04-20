@@ -1,44 +1,27 @@
-/*
- * Copyright 2023 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.wzl.duskreader.tv.presentation.screens
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.filled.LibraryBooks
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
-import com.wzl.duskreader.tv.presentation.screens.categories.CategoryMovieListScreen
-import com.wzl.duskreader.tv.presentation.screens.movies.MovieDetailsScreen
-import com.wzl.duskreader.tv.presentation.screens.videoPlayer.VideoPlayerScreen
+import com.wzl.duskreader.tv.presentation.screens.bookDetails.BookDetailsScreen
+import com.wzl.duskreader.tv.presentation.screens.reader.ReaderScreen
 
 enum class Screens(
     private val args: List<String>? = null,
     val isTabItem: Boolean = false,
-    val tabIcon: ImageVector? = null
+    val tabIcon: ImageVector? = null,
+    val tabLabel: String? = null,
 ) {
-    Profile,
-    Home(isTabItem = true),
-    Categories(isTabItem = true),
-    Movies(isTabItem = true),
-    Shows(isTabItem = true),
-    Favourites(isTabItem = true),
-    Search(isTabItem = true, tabIcon = Icons.Default.Search),
-    CategoryMovieList(listOf(CategoryMovieListScreen.CategoryIdBundleKey)),
-    MovieDetails(listOf(MovieDetailsScreen.MovieIdBundleKey)),
+    Home(isTabItem = true, tabIcon = Icons.Default.Home, tabLabel = "首页"),
+    Library(isTabItem = true, tabIcon = Icons.AutoMirrored.Filled.LibraryBooks, tabLabel = "书库"),
+    Transfer(isTabItem = true, tabIcon = Icons.Default.CloudUpload, tabLabel = "传书"),
+    Settings(isTabItem = true, tabIcon = Icons.Default.Settings, tabLabel = "设置"),
     Dashboard,
-    VideoPlayer(listOf(VideoPlayerScreen.MovieIdBundleKey));
+    BookDetails(listOf(BookDetailsScreen.BookIdBundleKey)),
+    Reader(listOf(ReaderScreen.BookIdBundleKey));
 
     operator fun invoke(): String {
         val argList = StringBuilder()
