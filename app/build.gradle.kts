@@ -49,6 +49,10 @@ android {
     }
     lint {
         disable.add("NullSafeMutableLiveData")
+        // Workaround for AGP/Kotlin analyzer incompatibility crash in Compose lint.
+        disable.add("FrequentlyChangingValue")
+        disable.add("RememberInComposition")
+        disable.add("AutoboxingStateCreation")
         abortOnError = false
     }
 }

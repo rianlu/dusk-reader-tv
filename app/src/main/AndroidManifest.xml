@@ -24,7 +24,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.DuskReaderTV">
+        android:theme="@style/Theme.App.Starting">
         <activity
             android:name="com.wzl.duskreader.tv.MainActivity"
             android:exported="true">

@@ -1,37 +1,82 @@
 package com.wzl.duskreader.tv.ui.screen
 
-import androidx.compose.animation.*
+import android.view.KeyEvent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.input.key.*
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.foundation.lazy.list.TvLazyColumn
-import androidx.tv.material3.*
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.tv.foundation.lazy.list.itemsIndexed
+import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.Icon
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Surface
+import androidx.tv.material3.SurfaceDefaults
+import androidx.tv.material3.Text
+import com.wzl.duskreader.tv.ui.component.LoadingIndicator
+import com.wzl.duskreader.tv.ui.component.ReaderSettingsOverlay
+import com.wzl.duskreader.tv.ui.theme.rememberDimensions
 import com.wzl.duskreader.tv.ui.viewmodel.ReaderViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.wzl.duskreader.tv.util.DebugLogger
-
-enum class ReaderTheme(val bgColor: Color, val textColor: Color, val displayName: String) {
-    Parchment(Color(0xFFF5F2E9), Color(0xFF2C2C2C), "羊皮纸"),
-    DeepSea(Color(0xFF1A1C2C), Color(0xFFA0A5B1), "深海")
-}
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -39,148 +84,539 @@ fun ReaderScreen(
     viewModel: ReaderViewModel,
     onBack: () -> Unit
 ) {
-    val content by viewModel.content.collectAsState()
+    val dimensions = rememberDimensions()
+    val pages by viewModel.pages.collectAsState()
+    val isLoaded by viewModel.isLoaded.collectAsState()
     val chapters by viewModel.chapters.collectAsState()
-    val currentIndex by viewModel.currentChapterIndex.collectAsState()
-    
-    var showControls by remember { mutableStateOf(false) }
-    var fontSize by remember { mutableIntStateOf(32) }
-    var currentTheme by remember { mutableStateOf(ReaderTheme.Parchment) }
-    
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
-    val scrollState = rememberScrollState()
-    val scope = rememberCoroutineScope()
-    val focusRequester = remember { FocusRequester() }
+    val totalProgress by viewModel.totalProgress.collectAsState()
+    val isPaging by viewModel.isPaging.collectAsState()
+    val currentChapterTitle by viewModel.currentChapterTitle.collectAsState()
+    val snapToEndAfterPaging by viewModel.snapToEndAfterPaging.collectAsState()
 
-    LaunchedEffect(Unit) {
-        delay(300)
-        focusRequester.requestFocus()
+    var showControls by remember { mutableStateOf(false) }
+    var showTOC by remember { mutableStateOf(false) }
+    var showReaderSettings by remember { mutableStateOf(false) }
+
+    var fontSize by remember { mutableIntStateOf(22) }
+    var currentTheme by remember { mutableStateOf(ReaderTheme.Cinematic) }
+    var isVertical by remember { mutableStateOf(false) }
+    val isSerif by remember { mutableStateOf(false) }
+    val brightness by remember { mutableFloatStateOf(1f) }
+    var lineSpacing by remember { mutableFloatStateOf(1.8f) }
+    var paragraphSpacing by remember { mutableIntStateOf(16) }
+
+    val readerPanelRequester = remember { FocusRequester() }
+    val prevPageRequester = remember { FocusRequester() }
+    val tocButtonRequester = remember { FocusRequester() }
+    val settingsButtonRequester = remember { FocusRequester() }
+    val nextPageRequester = remember { FocusRequester() }
+    val tocFirstItemRequester = remember { FocusRequester() }
+    val settingsFirstRowRequester = remember { FocusRequester() }
+
+    val scope = rememberCoroutineScope()
+    val textMeasurer = rememberTextMeasurer()
+    val pagerState = rememberPagerState(pageCount = { maxOf(1, pages.size) })
+
+    LaunchedEffect(showControls, showTOC, showReaderSettings, isLoaded) {
+        if (!isLoaded) return@LaunchedEffect
+        delay(80)
+        try {
+            when {
+                showTOC -> tocFirstItemRequester.requestFocus()
+                showReaderSettings -> settingsFirstRowRequester.requestFocus()
+                showControls -> prevPageRequester.requestFocus()
+                else -> readerPanelRequester.requestFocus()
+            }
+        } catch (_: Exception) {}
     }
 
-    LaunchedEffect(showControls) {
-        if (showControls) {
-            delay(5000)
-            showControls = false
+    val textStyle = TextStyle(
+        fontSize = fontSize.sp,
+        lineHeight = (fontSize * lineSpacing).sp,
+        color = currentTheme.textColor,
+        letterSpacing = 1.sp,
+        textAlign = TextAlign.Justify,
+        fontFamily = if (isSerif) FontFamily.Serif else FontFamily.SansSerif
+    )
+
+    LaunchedEffect(isLoaded, fontSize, currentTheme, lineSpacing, dimensions.readerHorizontalPadding) {
+        if (isLoaded && pages.isEmpty()) {
+            val constraints = androidx.compose.ui.unit.Constraints(
+                maxWidth = (1920 - dimensions.readerHorizontalPadding.value.toInt() * 2 - dimensions.readerColumnGap.value.toInt()) / 2,
+                maxHeight = (1080 - dimensions.readerVerticalPadding.value.toInt() * 2)
+            )
+            viewModel.performPaging(textMeasurer, constraints, textStyle)
         }
     }
 
-    LaunchedEffect(currentIndex) {
-        scrollState.scrollTo(0)
+    LaunchedEffect(pagerState.currentPage, pages) {
+        if (pages.isNotEmpty()) {
+            viewModel.onPageChanged(pagerState.currentPage)
+        }
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            Column(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .width(400.dp)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
-                    .padding(24.dp)
-            ) {
-                Text("目录", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 16.dp))
-                Box(modifier = Modifier.weight(1f)) {
-                    TvLazyColumn {
-                        items(chapters.size) { index ->
-                            NavigationDrawerItem(
-                                selected = (currentIndex == index),
-                                onClick = {
-                                    viewModel.loadChapter(index)
-                                    scope.launch { drawerState.setValue(DrawerValue.Closed) }
-                                },
-                                leadingContent = { Box(Modifier.size(4.dp)) }
-                            ) {
-                                Text(text = chapters[index].title, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp))
-                            }
-                        }
+    LaunchedEffect(pages.size, snapToEndAfterPaging) {
+        if (pages.isEmpty()) return@LaunchedEffect
+        when {
+            snapToEndAfterPaging -> {
+                pagerState.scrollToPage(pages.lastIndex)
+                viewModel.onPageChanged(pages.lastIndex)
+                viewModel.consumeSnapToEndFlag()
+            }
+            pagerState.currentPage > pages.lastIndex -> pagerState.scrollToPage(pages.lastIndex)
+        }
+    }
+
+    fun moveForward() {
+        if (pages.isEmpty()) return
+        if (pagerState.currentPage < pages.lastIndex) {
+            scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+        } else {
+            viewModel.loadNextWindow()
+        }
+    }
+
+    fun moveBackward() {
+        if (pages.isEmpty()) return
+        if (pagerState.currentPage > 0) {
+            scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+        } else {
+            viewModel.loadPreviousWindow()
+        }
+    }
+
+    val nowText = remember {
+        LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+    }
+
+    val immersive = !showControls && !showTOC && !showReaderSettings
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(currentTheme.bgColor)
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (event.nativeKeyEvent.keyCode) {
+                    KeyEvent.KEYCODE_DPAD_CENTER,
+                    KeyEvent.KEYCODE_ENTER -> {
+                        if (immersive) {
+                            showControls = true
+                            true
+                        } else false
                     }
+                    KeyEvent.KEYCODE_BACK -> {
+                        when {
+                            showTOC -> showTOC = false
+                            showReaderSettings -> showReaderSettings = false
+                            showControls -> showControls = false
+                            else -> onBack()
+                        }
+                        true
+                    }
+                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        if (immersive && !isVertical) {
+                            moveBackward()
+                            true
+                        } else false
+                    }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (immersive && !isVertical) {
+                            moveForward()
+                            true
+                        } else false
+                    }
+                    else -> false
                 }
             }
-        }
+            .focusRequester(readerPanelRequester)
+            .focusable()
     ) {
+        // 主内容（Pager）
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(currentTheme.bgColor)
-                .focusRequester(focusRequester)
-                .focusable()
-                .onKeyEvent { event ->
-                    if (event.type == KeyEventType.KeyDown) {
-                        when (event.nativeKeyEvent.keyCode) {
-                            android.view.KeyEvent.KEYCODE_DPAD_CENTER,
-                            android.view.KeyEvent.KEYCODE_ENTER -> { showControls = !showControls; true }
-                            android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> { if (!showControls) viewModel.nextChapter(); true }
-                            android.view.KeyEvent.KEYCODE_DPAD_LEFT -> { if (!showControls) viewModel.prevChapter(); true }
-                            android.view.KeyEvent.KEYCODE_BACK -> {
-                                if (drawerState.currentValue == DrawerValue.Open) {
-                                    scope.launch { drawerState.setValue(DrawerValue.Closed) }
-                                } else if (showControls) {
-                                    showControls = false
-                                } else {
-                                    onBack()
-                                }
-                                true
-                            }
-                            else -> false
-                        }
-                    } else false
-                }
+                .padding(
+                    horizontal = dimensions.readerHorizontalPadding,
+                    vertical = dimensions.readerVerticalPadding
+                )
         ) {
-            Column(modifier = Modifier.fillMaxSize().padding(horizontal = 60.dp)) {
-                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(
-                        text = chapters.getOrNull(currentIndex)?.title ?: "",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = currentTheme.textColor.copy(alpha = 0.6f)
-                    )
-                }
+            when {
+                !isLoaded -> LoadingIndicator(
+                    modifier = Modifier.align(Alignment.Center),
+                    size = (48 * dimensions.scale).dp,
+                    strokeWidth = (4 * dimensions.scale).dp,
+                    message = "加载中..."
+                )
+                isPaging -> LoadingIndicator(
+                    modifier = Modifier.align(Alignment.Center),
+                    size = (48 * dimensions.scale).dp,
+                    strokeWidth = (4 * dimensions.scale).dp,
+                    message = "排版中..."
+                )
+                pages.isEmpty() -> Text(
+                    "内容为空",
+                    color = currentTheme.textColor,
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+                else -> HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    userScrollEnabled = false,
+                    pageSpacing = dimensions.readerColumnGap
+                ) { index ->
+                    val pageText = pages.getOrNull(index).orEmpty()
+                    val mid = pageText.length / 2
+                    val leftText = pageText.substring(0, mid)
+                    val rightText = pageText.substring(mid)
 
-                Box(modifier = Modifier.weight(1f).verticalScroll(scrollState)) {
-                    Text(
-                        text = content,
-                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize.sp, lineHeight = (fontSize * 1.5).sp),
-                        color = currentTheme.textColor,
-                        modifier = Modifier.padding(bottom = 80.dp)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.readerColumnGap)
+                    ) {
+                        Text(text = leftText, style = textStyle, modifier = Modifier.weight(1f))
+                        Text(text = rightText, style = textStyle, modifier = Modifier.weight(1f))
+                    }
                 }
             }
+        }
 
-            AnimatedVisibility(
-                visible = showControls,
-                enter = slideInVertically(initialOffsetY = { it }),
-                exit = slideOutVertically(targetOffsetY = { it }),
-                modifier = Modifier.align(Alignment.BottomCenter)
+        // 顶部信息栏（只读）
+        AnimatedVisibility(
+            visible = showControls,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+            modifier = Modifier.align(Alignment.TopCenter)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.75f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+                    .padding(
+                        horizontal = dimensions.contentPadding,
+                        vertical = dimensions.spacingL
+                    )
             ) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth().height(150.dp),
-                    colors = SurfaceDefaults.colors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
-                    shape = RectangleShape
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
-                        Text(text = "进度: ${currentIndex + 1} / ${chapters.size} 章节", style = MaterialTheme.typography.labelLarge)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Button(onClick = { scope.launch { drawerState.setValue(DrawerValue.Open) }; showControls = false }) {
-                                Icon(Icons.Default.Menu, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("目录")
-                            }
-                            
-                            // 主题切换按钮
-                            OutlinedButton(onClick = {
-                                currentTheme = if (currentTheme == ReaderTheme.Parchment) ReaderTheme.DeepSea else ReaderTheme.Parchment
-                            }) {
-                                Icon(Icons.Default.Palette, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text(currentTheme.displayName)
-                            }
+                    Column {
+                        Text(
+                            text = "正在阅读",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.45f)
+                        )
+                        Text(
+                            text = viewModel.bookTitle(),
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White
+                        )
+                        Text(
+                            text = currentChapterTitle,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White.copy(alpha = 0.65f)
+                        )
+                    }
 
-                            OutlinedButton(onClick = { if (fontSize > 16) fontSize -= 4 }) { Text("A-") }
-                            OutlinedButton(onClick = { if (fontSize < 64) fontSize += 4 }) { Text("A+") }
-                            OutlinedButton(onClick = onBack) { Text("退出阅读") }
+                    Surface(
+                        colors = SurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.08f)),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(
+                                horizontal = dimensions.spacingS,
+                                vertical = dimensions.spacingXS
+                            ),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = String.format("%.0f%%", totalProgress * 100),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(dimensions.spacingS))
+                            Icon(
+                                imageVector = Icons.Default.AccessTime,
+                                contentDescription = null,
+                                modifier = Modifier.size((14 * dimensions.scale).dp),
+                                tint = Color.White.copy(alpha = 0.6f)
+                            )
+                            Spacer(modifier = Modifier.width(dimensions.spacingXS))
+                            Text(
+                                text = nowText,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White.copy(alpha = 0.8f)
+                            )
                         }
                     }
                 }
+            }
+        }
+
+        // 底部控制栏（4 按钮 focusGroup）
+        AnimatedVisibility(
+            visible = showControls,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.85f)
+                            )
+                        )
+                    )
+                    .padding(
+                        horizontal = dimensions.contentPadding,
+                        vertical = dimensions.spacingL
+                    )
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = String.format("%.0f%% 已读", totalProgress * 100),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.White
+                    )
+                    Text(
+                        text = currentChapterTitle,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(dimensions.spacingM))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusGroup(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ControlButton(
+                        icon = Icons.Default.ChevronLeft,
+                        label = "上一页",
+                        onClick = { moveBackward() },
+                        modifier = Modifier
+                            .focusRequester(prevPageRequester)
+                            .focusProperties {
+                                left = FocusRequester.Cancel
+                                up = FocusRequester.Cancel
+                                down = FocusRequester.Cancel
+                            }
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingM)) {
+                        ControlButton(
+                            icon = Icons.Default.AutoStories,
+                            label = "目录",
+                            onClick = {
+                                showTOC = true
+                                showControls = false
+                            },
+                            modifier = Modifier
+                                .focusRequester(tocButtonRequester)
+                                .focusProperties {
+                                    up = FocusRequester.Cancel
+                                    down = FocusRequester.Cancel
+                                }
+                        )
+                        ControlButton(
+                            icon = Icons.Default.Settings,
+                            label = "设置",
+                            onClick = {
+                                showReaderSettings = true
+                                showControls = false
+                            },
+                            modifier = Modifier
+                                .focusRequester(settingsButtonRequester)
+                                .focusProperties {
+                                    up = FocusRequester.Cancel
+                                    down = FocusRequester.Cancel
+                                }
+                        )
+                    }
+
+                    ControlButton(
+                        icon = Icons.Default.ChevronRight,
+                        label = "下一页",
+                        trailingIcon = true,
+                        onClick = { moveForward() },
+                        modifier = Modifier
+                            .focusRequester(nextPageRequester)
+                            .focusProperties {
+                                right = FocusRequester.Cancel
+                                up = FocusRequester.Cancel
+                                down = FocusRequester.Cancel
+                            }
+                    )
+                }
+            }
+        }
+
+        // 阅读设置面板
+        AnimatedVisibility(
+            visible = showReaderSettings,
+            enter = slideInHorizontally(initialOffsetX = { it }),
+            exit = slideOutHorizontally(targetOffsetX = { it }),
+            modifier = Modifier.align(Alignment.CenterEnd)
+        ) {
+            ReaderSettingsOverlay(
+                currentFontSize = fontSize,
+                currentTheme = currentTheme,
+                isVertical = isVertical,
+                currentLineSpacing = lineSpacing,
+                currentParagraphSpacing = paragraphSpacing,
+                firstItemRequester = settingsFirstRowRequester,
+                onFontSizeChange = { fontSize = it },
+                onThemeChange = { currentTheme = it },
+                onFlipModeChange = { isVertical = it },
+                onLineSpacingChange = { lineSpacing = it },
+                onParagraphSpacingChange = { paragraphSpacing = it },
+                onConfirm = {
+                    showReaderSettings = false
+                    showControls = true
+                },
+                onDismiss = {
+                    showReaderSettings = false
+                    showControls = true
+                }
+            )
+        }
+
+        // 目录面板
+        AnimatedVisibility(
+            visible = showTOC,
+            enter = slideInHorizontally(initialOffsetX = { -it }),
+            exit = slideOutHorizontally(targetOffsetX = { -it }),
+            modifier = Modifier.align(Alignment.CenterStart)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width((400 * dimensions.scale).dp)
+                    .focusProperties {
+                        left = FocusRequester.Cancel
+                        right = FocusRequester.Cancel
+                    },
+                colors = SurfaceDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(dimensions.spacingL)
+                ) {
+                    Text(
+                        "章节目录",
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.padding(dimensions.spacingS)
+                    )
+                    Spacer(modifier = Modifier.height(dimensions.spacingS))
+                    TvLazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRestorer(),
+                        verticalArrangement = Arrangement.spacedBy(dimensions.spacingXS)
+                    ) {
+                        itemsIndexed(chapters) { index, chapter ->
+                            Surface(
+                                onClick = {
+                                    viewModel.jumpToOffset(chapter.offset)
+                                    showTOC = false
+                                    showControls = true
+                                },
+                                modifier = if (index == 0) {
+                                    Modifier.focusRequester(tocFirstItemRequester)
+                                } else Modifier,
+                                colors = ClickableSurfaceDefaults.colors(
+                                    containerColor = Color.White.copy(alpha = 0.05f),
+                                    focusedContainerColor = Color.White,
+                                    focusedContentColor = Color.Black
+                                ),
+                                shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.medium)
+                            ) {
+                                Text(
+                                    text = chapter.title,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(dimensions.spacingM),
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 亮度遮罩
+        if (brightness < 1.0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 1.0f - brightness))
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun ControlButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    trailingIcon: Boolean = false
+) {
+    val dimensions = rememberDimensions()
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.White.copy(alpha = 0.08f),
+            focusedContainerColor = Color.White,
+            contentColor = Color.White,
+            focusedContentColor = Color.Black
+        ),
+        shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.large)
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = dimensions.spacingL,
+                vertical = dimensions.spacingM
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingXS)
+        ) {
+            if (!trailingIcon) {
+                Icon(icon, contentDescription = label, modifier = Modifier.size(20.dp))
+                Text(label, style = MaterialTheme.typography.labelLarge)
+            } else {
+                Text(label, style = MaterialTheme.typography.labelLarge)
+                Icon(icon, contentDescription = label, modifier = Modifier.size(20.dp))
             }
         }
     }

@@ -9,58 +9,90 @@ import android.os.Environment
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.wzl.duskreader.tv.ui.viewmodel.ShelfViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.tv.material3.*
 
 /**
- * 权限处理组件：由于需要 context 和 ActivityResultLauncher，定义为 Composable。
+ * 极简性能版权限处理器
  */
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun StoragePermissionHandler(shelfViewModel: ShelfViewModel) {
+fun StoragePermissionHandler(content: @Composable () -> Unit) {
     val context = LocalContext.current
-    
-    // 针对 Android 11 (API 30) 及以上的处理：检查是否拥有所有文件访问权
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        LaunchedEffect(Unit) {
-            if (!Environment.isExternalStorageManager()) {
-                try {
-                    val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-                        data = Uri.parse("package:${context.packageName}")
-                    }
-                    context.startActivity(intent)
-                } catch (e: Exception) {
-                    val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                    context.startActivity(intent)
-                }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var hasPermission by remember { mutableStateOf(false) }
+
+    fun checkPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    val legacyLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        hasPermission = isGranted
+    }
+
+    val manageStorageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        hasPermission = checkPermission()
+    }
+
+    // 仅在启动时执行一次检查，不再循环监听，降低开销
+    LaunchedEffect(Unit) {
+        hasPermission = checkPermission()
+        if (!hasPermission && Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            legacyLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasPermission = checkPermission()
             }
         }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // 常规存储权限请求 (针对 API 29 及以下，或作为补足)
-    val permissionsToRequest = arrayOf(
-        Manifest.permission.READ_EXTERNAL_STORAGE,
-        Manifest.permission.WRITE_EXTERNAL_STORAGE
-    )
-    
-    val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val allGranted = permissions.entries.all { it.value }
-        if (allGranted) {
-            // 权限被授予后，立即触发扫描
-            shelfViewModel.scanStorage()
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        val needsRequest = permissionsToRequest.any {
-            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
-        }
-        if (needsRequest) {
-            launcher.launch(permissionsToRequest)
+    if (hasPermission) {
+        content()
+    } else {
+        // 极简等待页，减少渲染压力
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("“暮阅”需要存储权限", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(20.dp))
+                Button(onClick = { 
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        val intent = Intent(
+                            Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                            Uri.parse("package:${context.packageName}")
+                        )
+                        val fallbackIntent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                        val targetIntent = if (intent.resolveActivity(context.packageManager) != null) {
+                            intent
+                        } else {
+                            fallbackIntent
+                        }
+                        manageStorageLauncher.launch(targetIntent)
+                    } else {
+                        legacyLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    }
+                }) {
+                    Text(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) "前往系统设置授权" else "点击授予权限")
+                }
+            }
         }
     }
 }

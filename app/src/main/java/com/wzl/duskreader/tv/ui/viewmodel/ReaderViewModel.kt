@@ -38,9 +38,13 @@ class ReaderViewModel(
     data class Chapter(val title: String, val offset: Int)
     private val _chapters = MutableStateFlow<List<Chapter>>(emptyList())
     val chapters = _chapters.asStateFlow()
+    private val _currentChapterTitle = MutableStateFlow("开始")
+    val currentChapterTitle = _currentChapterTitle.asStateFlow()
 
     private val _isPaging = MutableStateFlow(false)
     val isPaging = _isPaging.asStateFlow()
+    private val _snapToEndAfterPaging = MutableStateFlow(false)
+    val snapToEndAfterPaging = _snapToEndAfterPaging.asStateFlow()
 
     private var fullText: String = ""
     // 当前窗口在全书中的起始字符位置
@@ -83,6 +87,7 @@ class ReaderViewModel(
                 
                 _isLoaded.value = true
                 updateProgress()
+                updateCurrentChapterTitle()
                 DebugLogger.d("ReaderVM", "文本加载完成，长度: ${fullText.length}, 初始偏移: $currentPageOffset")
             } else {
                 _pages.value = listOf("文件不存在: ${book.path}")
@@ -102,11 +107,20 @@ class ReaderViewModel(
             found.add(Chapter("开始", 0))
         }
         _chapters.value = found
+        _currentChapterTitle.value = found.first().title
     }
 
     private fun updateProgress() {
         if (fullText.isNotEmpty()) {
             _totalProgress.value = currentPageOffset.toFloat() / fullText.length
+        }
+        updateCurrentChapterTitle()
+    }
+
+    private fun updateCurrentChapterTitle() {
+        val chapter = _chapters.value.lastOrNull { it.offset <= currentPageOffset } ?: _chapters.value.firstOrNull()
+        if (chapter != null) {
+            _currentChapterTitle.value = chapter.title
         }
     }
 
@@ -123,7 +137,7 @@ class ReaderViewModel(
     }
 
     /**
-     * 全书分页逻辑：添加 200ms 延迟防抖，防止连续快速翻页时的 IO 堆积
+     * 全书分页逻辑：优化防抖延迟,提升翻页响应速度
      */
     fun performPaging(
         textMeasurer: TextMeasurer,
@@ -131,59 +145,63 @@ class ReaderViewModel(
         textStyle: TextStyle
     ) {
         if (!_isLoaded.value || fullText.isEmpty()) return
-        if (_isPaging.value) return 
+        if (_isPaging.value) return
 
         viewModelScope.launch(Dispatchers.Default) {
-             // 增加防抖，避免连续触发
             _isPaging.value = true
             val startTime = System.currentTimeMillis()
-            
-            // 如果是连续触发，等待一小会儿
-            kotlinx.coroutines.delay(200)
-            
-            val pagesList = mutableListOf<String>()
-            val lengths = mutableListOf<Int>()
-            
-            // 窗口大小约 40,000 字
-            val windowLimit = 40000
-            var cursor = windowStartOffset
-            val totalLength = fullText.length
-            val endOfWindow = (cursor + windowLimit).coerceAtMost(totalLength)
-            
-            var remainingText = fullText.substring(cursor, endOfWindow)
-            
-            // 每次分页最多生成 100 页
-            while (remainingText.isNotEmpty() && pagesList.size < 100) {
-                val layoutResult: TextLayoutResult = textMeasurer.measure(
-                    text = remainingText,
-                    style = textStyle,
-                    constraints = containerConstraints,
-                    softWrap = true
+            try {
+                // 减少防抖延迟,提升响应速度
+                kotlinx.coroutines.delay(100)
+
+                val pagesList = mutableListOf<String>()
+                val lengths = mutableListOf<Int>()
+
+                // 窗口大小约 40,000 字
+                val windowLimit = 40000
+                var cursor = windowStartOffset
+                val totalLength = fullText.length
+                val endOfWindow = (cursor + windowLimit).coerceAtMost(totalLength)
+
+                var remainingText = fullText.substring(cursor, endOfWindow)
+
+                // 每次分页最多生成 100 页
+                while (remainingText.isNotEmpty() && pagesList.size < 100) {
+                    val layoutResult: TextLayoutResult = textMeasurer.measure(
+                        text = remainingText,
+                        style = textStyle,
+                        constraints = containerConstraints,
+                        softWrap = true
+                    )
+
+                    val breakIndex = if (layoutResult.hasVisualOverflow) {
+                        layoutResult.getLineEnd(layoutResult.lineCount - 1, true)
+                    } else {
+                        remainingText.length
+                    }
+
+                    if (breakIndex <= 0) {
+                        val fallback = remainingText.take(1)
+                        pagesList.add(fallback)
+                        lengths.add(fallback.length)
+                        remainingText = remainingText.drop(1)
+                    } else {
+                        val pageContent = remainingText.substring(0, breakIndex)
+                        pagesList.add(pageContent)
+                        lengths.add(pageContent.length)
+                        remainingText = remainingText.substring(breakIndex)
+                    }
+                }
+
+                pageLengths = lengths
+                _pages.value = pagesList
+                DebugLogger.d(
+                    "ReaderVM",
+                    "窗口分页完成 [${windowStartOffset}..${windowStartOffset + lengths.sum()}], 耗时: ${System.currentTimeMillis() - startTime}ms"
                 )
-
-                val breakIndex = if (layoutResult.hasVisualOverflow) {
-                    layoutResult.getLineEnd(layoutResult.lineCount - 1, true)
-                } else {
-                    remainingText.length
-                }
-
-                if (breakIndex <= 0) {
-                    val fallback = remainingText.take(1)
-                    pagesList.add(fallback)
-                    lengths.add(fallback.length)
-                    remainingText = remainingText.drop(1)
-                } else {
-                    val pageContent = remainingText.substring(0, breakIndex)
-                    pagesList.add(pageContent)
-                    lengths.add(pageContent.length)
-                    remainingText = remainingText.substring(breakIndex)
-                }
+            } finally {
+                _isPaging.value = false
             }
-
-            pageLengths = lengths
-            _pages.value = pagesList
-            _isPaging.value = false
-            DebugLogger.d("ReaderVM", "窗口分页完成 [${windowStartOffset}..${windowStartOffset + lengths.sum()}], 耗时: ${System.currentTimeMillis() - startTime}ms")
         }
     }
 
@@ -209,6 +227,7 @@ class ReaderViewModel(
         if (_isPaging.value || pageLengths.isEmpty()) return
         windowStartOffset += pageLengths.sum()
         currentPageOffset = windowStartOffset
+        _snapToEndAfterPaging.value = false
         // 不要主动清空 _pages，由 performPaging 结束后替换
         // 但我们需要一种方式通知 UI 重新调用 performPaging
         // 方案：我们将 _pages 设为一个极简单的特殊值，或者通过一个专门的 trigger
@@ -223,8 +242,15 @@ class ReaderViewModel(
         if (_isPaging.value) return
         windowStartOffset = (windowStartOffset - 35000).coerceAtLeast(0)
         currentPageOffset = windowStartOffset
+        _snapToEndAfterPaging.value = true
         _pages.value = emptyList()
     }
+
+    fun consumeSnapToEndFlag() {
+        _snapToEndAfterPaging.value = false
+    }
+
+    fun bookTitle(): String = book.title
 
     fun saveProgress() {
         viewModelScope.launch(Dispatchers.IO) {

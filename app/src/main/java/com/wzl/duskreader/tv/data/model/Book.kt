@@ -1,12 +1,13 @@
 package com.wzl.duskreader.tv.data.model
 
+import androidx.compose.runtime.Immutable
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * 书籍实体类：用于在 Room 数据库中存储书籍的元数据
- * 包含书名、作者、本地路径、封面图路径、格式以及最后的阅读进度
+ * 书籍实体类：添加 @Immutable 以优化 Compose 重绘性能
  */
+@Immutable
 @Entity(tableName = "books")
 data class Book(
     @PrimaryKey(autoGenerate = true) 

@@ -14,3 +14,9 @@
 .cxx
 local.properties
 .worktrees/
+.reference_tv_samples/
+.kotlin/
+build.log
+build_output.txt
+/.idea/deploymentTargetSelector.xml
+/.idea/misc.xml

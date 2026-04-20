@@ -1,94 +1,88 @@
 package com.wzl.duskreader.tv.ui.screen
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Inbox
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.tv.foundation.lazy.grid.TvGridCells
-import androidx.tv.foundation.lazy.grid.TvLazyVerticalGrid
-import androidx.tv.foundation.lazy.grid.items
-import androidx.tv.material3.*
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
+import androidx.tv.foundation.lazy.list.TvLazyColumn
+import androidx.tv.foundation.lazy.list.itemsIndexed
 import com.wzl.duskreader.tv.data.model.Book
+import com.wzl.duskreader.tv.data.model.progressRatio
 import com.wzl.duskreader.tv.ui.component.BookCard
+import com.wzl.duskreader.tv.ui.component.SectionHeader
+import com.wzl.duskreader.tv.ui.theme.rememberDimensions
 import com.wzl.duskreader.tv.ui.viewmodel.ShelfViewModel
-import com.wzl.duskreader.tv.util.DebugLogger
+
+private const val COLUMNS_PER_ROW = 6
 
 /**
- * 书架主页面：展示所有已导入的书籍。
+ * 书架：全部书籍按 [COLUMNS_PER_ROW] 列网格展示。
+ *
+ * 焦点：
+ * - 第一本挂 [entryRequester]，up=tabUpRequester，左=Cancel
+ * - 每行最左一本 left=Cancel，避免左键跳出 Row
+ * - 最后一行没有下邻居，Compose 默认停留；上下由 TvLazyColumn 处理滚动
  */
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun ShelfScreen(
     viewModel: ShelfViewModel,
-    onBookClick: (Book) -> Unit
+    entryRequester: FocusRequester,
+    tabUpRequester: FocusRequester,
+    onBookClick: (Book) -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    val dimensions = rememberDimensions()
     val books by viewModel.books.collectAsState()
-    
-    DebugLogger.d("ShelfScreen", "重绘书架。书籍数量: ${books.size}")
 
-    Column(
-        modifier = Modifier
+    val rows = books.chunked(COLUMNS_PER_ROW)
+
+    TvLazyColumn(
+        modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 60.dp) // 提升至 60dp 安全区域
+            .focusRestorer(),
+        contentPadding = PaddingValues(
+            start = dimensions.contentPadding,
+            end = dimensions.contentPadding,
+            top = dimensions.spacingM,
+            bottom = dimensions.contentPadding
+        ),
+        verticalArrangement = Arrangement.spacedBy(dimensions.spacingL)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 24.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "我的书架",
-                style = MaterialTheme.typography.displaySmall
+        item {
+            SectionHeader(
+                title = "书架",
+                subtitle = "共 ${books.size} 本"
             )
-            
-            // 扫描按钮
-            Button(onClick = { viewModel.scanStorage() }) {
-                Icon(Icons.Default.Refresh, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("扫描本地")
-            }
         }
 
-        if (books.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.Inbox,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = Color.Gray
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        "书架空空如也，请点击左侧“传书”从手机导入",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
-            }
-        } else {
-            TvLazyVerticalGrid(
-                columns = TvGridCells.Adaptive(160.dp),
-                contentPadding = PaddingValues(bottom = 32.dp),
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
-            ) {
-                items(books) { book ->
+        itemsIndexed(rows) { rowIndex, rowBooks ->
+            Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingL)) {
+                rowBooks.forEachIndexed { colIndex, book ->
+                    val isFirst = rowIndex == 0 && colIndex == 0
+                    val isRowStart = colIndex == 0
+                    val cardModifier = when {
+                        isFirst -> Modifier
+                            .focusRequester(entryRequester)
+                            .focusProperties {
+                                up = tabUpRequester
+                                left = FocusRequester.Cancel
+                            }
+                        isRowStart -> Modifier.focusProperties { left = FocusRequester.Cancel }
+                        else -> Modifier
+                    }
                     BookCard(
                         title = book.title,
+                        progress = book.progressRatio(),
                         onClick = { onBookClick(book) },
-                        onLongClick = { viewModel.removeBook(book) }
+                        modifier = cardModifier
                     )
                 }
             }
