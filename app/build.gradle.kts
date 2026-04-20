@@ -1,30 +1,51 @@
+/*
+ * Copyright 2023 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
-    id("com.google.devtools.ksp")
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.hilt)
+    alias(libs.plugins.ksp)
 }
 
-// 核心修复：显式告诉 Kotlin 编译器使用 JVM 17
-// 这必须放在 android 块外面
 kotlin {
     jvmToolchain(17)
 }
 
 android {
     namespace = "com.wzl.duskreader.tv"
+    // Needed for latest androidx snapshot build
     compileSdk = 35
 
     defaultConfig {
         applicationId = "com.wzl.duskreader.tv"
-        minSdk = 23
+        minSdk = 28
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        vectorDrawables {
+            useSupportLibrary = true
+        }
     }
 
     buildTypes {
-        release {
+        getByName("release") {
             isMinifyEnabled = true
             signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
@@ -33,71 +54,63 @@ android {
             )
         }
     }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
-            excludes += "META-INF/INDEX.LIST"
-            excludes += "META-INF/io.netty.versions.properties"
         }
     }
-    lint {
-        disable.add("NullSafeMutableLiveData")
-        // Workaround for AGP/Kotlin analyzer incompatibility crash in Compose lint.
-        disable.add("FrequentlyChangingValue")
-        disable.add("RememberInComposition")
-        disable.add("AutoboxingStateCreation")
-        abortOnError = false
+
+    kotlinOptions {
+        jvmTarget = "17"
     }
 }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
-    implementation("androidx.core:core-splashscreen:1.0.1")
-    implementation(libs.androidx.appcompat)
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.material.icons.extended)
-    implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.tv.foundation)
-    implementation(libs.androidx.tv.material)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui.tooling.preview)
+
+    // extra material icons
+    implementation(libs.androidx.material.icons.extended)
+
+    // Material components optimized for TV apps
+    implementation(libs.androidx.tv.material)
+
+    // ViewModel in Compose
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    // Compose Navigation
     implementation(libs.androidx.navigation.compose)
+
+    // Coil
     implementation(libs.coil.compose)
 
-    // Coroutines
-    implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.kotlinx.coroutines.android)
-    testImplementation(libs.junit4)
-    testImplementation(libs.kotlinx.coroutines.test)
+    // JSON parser
+    implementation(libs.kotlinx.serialization)
 
-    // Room
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    implementation(libs.androidx.material3)
-    implementation(libs.androidx.compose.animation)
-    ksp(libs.androidx.room.compiler)
+    // Media3
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui)
 
-    // Ktor Server
-    implementation(libs.ktor.server.core)
-    implementation(libs.ktor.server.netty)
-    implementation(libs.ktor.server.html.builder)
-    
-    // QR Code
-    implementation(libs.zxing.core)
+    // SplashScreen
+    implementation(libs.androidx.core.splashscreen)
 
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    // Hilt
+    implementation(libs.hilt.android)
+    implementation(libs.androidx.hilt.navigation.compose)
+    ksp(libs.hilt.compiler)
+
+    // Baseline profile installer
+    implementation(libs.androidx.profileinstaller)
+
+    // Compose Previews
     debugImplementation(libs.androidx.compose.ui.tooling)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
