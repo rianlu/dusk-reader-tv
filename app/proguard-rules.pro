@@ -23,3 +23,12 @@
 # Ktor / Netty —— BlockHound 是 Netty 的可选 runtime 集成，不存在也没关系
 -dontwarn reactor.blockhound.**
 -dontwarn io.netty.util.internal.Hidden$NettyBlockHoundIntegration
+
+# Ktor / Netty —— 以下都是 optional runtime 依赖（SSL native、log4j、slf4j、jetty-npn、JMX），
+# 暮阅只用 Netty 裸 HTTP，用不到也不会在运行时加载
+-dontwarn io.netty.internal.tcnative.**
+-dontwarn org.apache.log4j.**
+-dontwarn org.apache.logging.log4j.**
+-dontwarn org.eclipse.jetty.npn.**
+-dontwarn org.slf4j.impl.**
+-dontwarn java.lang.management.**
