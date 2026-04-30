@@ -42,7 +42,6 @@ import androidx.tv.material3.Border
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
-import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
@@ -53,13 +52,11 @@ import java.util.Locale
 fun ReaderSettingsOverlay(
     currentFontSize: Int,
     currentTheme: ReaderTheme,
-    isVertical: Boolean,
     currentLineSpacing: Float,
     currentParagraphSpacing: Int,
     firstItemRequester: FocusRequester,
     onFontSizeChange: (Int) -> Unit,
     onThemeChange: (ReaderTheme) -> Unit,
-    onFlipModeChange: (Boolean) -> Unit,
     onLineSpacingChange: (Float) -> Unit,
     onParagraphSpacingChange: (Int) -> Unit,
     onConfirm: () -> Unit,
@@ -68,7 +65,7 @@ fun ReaderSettingsOverlay(
     Box(
         modifier = Modifier
             .fillMaxHeight()
-            .width(440.dp)
+            .width(460.dp)
             .focusGroup()
             .focusRestorer()
             .focusProperties {
@@ -78,101 +75,94 @@ fun ReaderSettingsOverlay(
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            colors = SurfaceDefaults.colors(containerColor = Color(0xFF151515)),
+            colors = SurfaceDefaults.colors(containerColor = Color(0xFF111111)),
             shape = RectangleShape,
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(40.dp),
+                    .padding(horizontal = 36.dp, vertical = 40.dp),
             ) {
                 Text(
-                    "阅读设置",
+                    text = "阅读设置",
                     style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
                     color = Color.White,
                 )
 
-                Spacer(modifier = Modifier.height(48.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "调整后选择“确认应用”生效",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.58f),
+                )
+
+                Spacer(modifier = Modifier.height(40.dp))
 
                 StepperField(
                     label = "字体大小",
                     value = "${currentFontSize}px",
-                    onDecrement = { onFontSizeChange((currentFontSize - 2).coerceIn(16, 80)) },
-                    onIncrement = { onFontSizeChange((currentFontSize + 2).coerceIn(16, 80)) },
+                    onDecrement = { onFontSizeChange((currentFontSize - 2).coerceIn(18, 80)) },
+                    onIncrement = { onFontSizeChange((currentFontSize + 2).coerceIn(18, 80)) },
                     decrementRequester = firstItemRequester,
                     modifier = Modifier.focusProperties { up = FocusRequester.Cancel },
                 )
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(28.dp))
 
                 StepperField(
                     label = "行间距",
                     value = String.format(Locale.ROOT, "%.1fx", currentLineSpacing),
                     onDecrement = {
-                        val next = ((currentLineSpacing * 10).toInt() - 1).coerceAtLeast(12)
+                        val next = ((currentLineSpacing * 10).toInt() - 1).coerceAtLeast(13)
                         onLineSpacingChange(next / 10f)
                     },
                     onIncrement = {
-                        val next = ((currentLineSpacing * 10).toInt() + 1).coerceAtMost(25)
+                        val next = ((currentLineSpacing * 10).toInt() + 1).coerceAtMost(24)
                         onLineSpacingChange(next / 10f)
                     },
                 )
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(28.dp))
 
                 StepperField(
-                    label = "段落间距",
+                    label = "段间距",
                     value = "${currentParagraphSpacing}dp",
                     onDecrement = { onParagraphSpacingChange((currentParagraphSpacing - 2).coerceIn(8, 32)) },
                     onIncrement = { onParagraphSpacingChange((currentParagraphSpacing + 2).coerceIn(8, 32)) },
                 )
 
-                Spacer(modifier = Modifier.height(40.dp))
+                Spacer(modifier = Modifier.height(36.dp))
 
                 Text(
-                    "背景主题",
+                    text = "背景主题",
                     color = Color.White.copy(alpha = 0.72f),
                     style = MaterialTheme.typography.titleMedium,
                 )
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.focusGroup(),
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
-                ) {
-                    ThemeOption("深黑", ReaderTheme.Cinematic, currentTheme == ReaderTheme.Cinematic) {
-                        onThemeChange(ReaderTheme.Cinematic)
-                    }
-                    ThemeOption("深海", ReaderTheme.DeepSea, currentTheme == ReaderTheme.DeepSea) {
-                        onThemeChange(ReaderTheme.DeepSea)
-                    }
-                    ThemeOption("羊皮纸", ReaderTheme.Parchment, currentTheme == ReaderTheme.Parchment) {
-                        onThemeChange(ReaderTheme.Parchment)
-                    }
-                }
 
-                Spacer(modifier = Modifier.height(32.dp))
-
-                Text(
-                    "翻页方式",
-                    color = Color.White.copy(alpha = 0.72f),
-                    style = MaterialTheme.typography.titleMedium,
-                )
                 Spacer(modifier = Modifier.height(16.dp))
+
                 Row(
                     modifier = Modifier.focusGroup(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    ModeButton("左右翻页", !isVertical, Modifier.weight(1f)) { onFlipModeChange(false) }
-                    ModeButton("上下滚动", isVertical, Modifier.weight(1f)) { onFlipModeChange(true) }
+                    ReaderTheme.values().forEach { theme ->
+                        ThemeOption(
+                            theme = theme,
+                            selected = currentTheme == theme,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onThemeChange(theme) },
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
 
                 Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusGroup(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Button(
                         onClick = onConfirm,
@@ -184,12 +174,16 @@ fun ReaderSettingsOverlay(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("确认应用", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            androidx.tv.material3.Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                            )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     Button(
                         onClick = onDismiss,
@@ -199,7 +193,7 @@ fun ReaderSettingsOverlay(
                             .focusProperties { down = FocusRequester.Cancel },
                         colors = ButtonDefaults.colors(
                             containerColor = Color.Transparent,
-                            contentColor = Color.White.copy(alpha = 0.6f),
+                            contentColor = Color.White.copy(alpha = 0.64f),
                         ),
                     ) {
                         Text("取消更改")
@@ -234,27 +228,25 @@ private fun StepperField(
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             StepperButton(
                 icon = Icons.Default.Remove,
                 contentDescription = "减少",
                 onClick = onDecrement,
                 modifier = Modifier
-                    .then(
-                        if (decrementRequester != null) Modifier.focusRequester(decrementRequester) else Modifier,
-                    )
+                    .then(if (decrementRequester != null) Modifier.focusRequester(decrementRequester) else Modifier)
                     .focusProperties { left = FocusRequester.Cancel },
             )
 
             Text(
                 text = value,
                 modifier = Modifier
-                    .width(72.dp)
+                    .width(84.dp)
                     .focusProperties { canFocus = false },
                 color = Color.White,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                 textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             )
 
             StepperButton(
@@ -286,78 +278,76 @@ private fun StepperButton(
         ),
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription, modifier = Modifier.size(20.dp))
+            androidx.tv.material3.Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }
 
 @Composable
 private fun ThemeOption(
-    name: String,
     theme: ReaderTheme,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Surface(
-            onClick = onClick,
-            modifier = Modifier.size(width = 96.dp, height = 112.dp),
-            shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.large),
-            colors = ClickableSurfaceDefaults.colors(
-                containerColor = Color(0xFF252525),
-                focusedContainerColor = Color(0xFF333333),
-            ),
-            border = ClickableSurfaceDefaults.border(
-                focusedBorder = Border(BorderStroke(2.dp, Color.White)),
-                border = if (selected) Border(BorderStroke(2.dp, Color.White)) else Border.None,
-            ),
-        ) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                Surface(
-                    modifier = Modifier.size(40.dp),
-                    shape = CircleShape,
-                    colors = SurfaceDefaults.colors(containerColor = theme.bgColor),
-                    border = if (theme.bgColor == Color(0xFF0E0E0E)) {
-                        Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)))
-                    } else Border.None,
-                ) {}
-            }
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            name,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (selected) Color.White else Color.White.copy(alpha = 0.5f),
-        )
-    }
-}
-
-@Composable
-private fun ModeButton(
-    text: String,
     selected: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier.height(56.dp),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (selected) Color(0xFF333333) else Color(0xFF202020),
-            focusedContainerColor = Color(0xFF404040),
-        ),
-        border = ClickableSurfaceDefaults.border(
-            border = if (selected) Border(BorderStroke(2.dp, Color.White)) else Border.None,
-            focusedBorder = Border(BorderStroke(2.dp, Color.White)),
-        ),
-        shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.large),
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-            Text(
-                text,
-                color = if (selected) Color.White else Color.White.copy(alpha = 0.6f),
-                style = MaterialTheme.typography.titleSmall,
-            )
+        Surface(
+            onClick = onClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(116.dp),
+            shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.large),
+            colors = ClickableSurfaceDefaults.colors(
+                containerColor = Color(0xFF222222),
+                focusedContainerColor = Color(0xFF303030),
+            ),
+            border = ClickableSurfaceDefaults.border(
+                border = if (selected) Border(BorderStroke(2.dp, Color.White)) else Border.None,
+                focusedBorder = Border(BorderStroke(2.dp, Color.White)),
+            ),
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Surface(
+                    modifier = Modifier.size(width = 72.dp, height = 84.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = SurfaceDefaults.colors(containerColor = theme.bgColor),
+                    border = if (theme == ReaderTheme.NightBlack) {
+                        Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)))
+                    } else {
+                        Border.None
+                    },
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "Aa",
+                            color = theme.textColor,
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        )
+                    }
+                }
+            }
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = theme.displayName,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) Color.White else Color.White.copy(alpha = 0.56f),
+            textAlign = TextAlign.Center,
+        )
     }
 }

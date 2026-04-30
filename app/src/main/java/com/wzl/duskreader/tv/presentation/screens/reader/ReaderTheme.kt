@@ -7,7 +7,8 @@ enum class ReaderTheme(
     val textColor: Color,
     val displayName: String,
 ) {
-    Parchment(Color(0xFFF5F2E9), Color(0xFF2C2C2C), "羊皮纸"),
-    Cinematic(Color(0xFF0E0E0E), Color(0xFFC6C6C6), "沉浸黑"),
-    DeepSea(Color(0xFF1A1C2C), Color(0xFFA0A5B1), "深海"),
+    NightBlack(Color(0xFF0A0A0A), Color(0xFFE4E0D8), "深色黑底"),
+    WarmParchment(Color(0xFFF4E9D8), Color(0xFF302A24), "护眼米色"),
+    PaperGray(Color(0xFFE6E6E1), Color(0xFF2D2D2D), "浅灰纸面"),
+    ForestNight(Color(0xFF13241E), Color(0xFFD6E2D9), "墨绿色夜读"),
 }

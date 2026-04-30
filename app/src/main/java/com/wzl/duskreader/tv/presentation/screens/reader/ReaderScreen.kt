@@ -33,10 +33,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AutoStories
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,18 +52,22 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -75,11 +78,11 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 object ReaderScreen {
     const val BookIdBundleKey = "bookId"
@@ -97,32 +100,49 @@ fun ReaderScreen(
     val totalProgress by viewModel.totalProgress.collectAsStateWithLifecycle()
     val isPaging by viewModel.isPaging.collectAsStateWithLifecycle()
     val currentChapterTitle by viewModel.currentChapterTitle.collectAsStateWithLifecycle()
-    val snapToEndAfterPaging by viewModel.snapToEndAfterPaging.collectAsStateWithLifecycle()
+    val pagingRequestVersion by viewModel.pagingRequestVersion.collectAsStateWithLifecycle()
+    val pendingPageIndex by viewModel.pendingPageIndex.collectAsStateWithLifecycle()
     val bookTitle by viewModel.bookTitle.collectAsStateWithLifecycle()
 
     var showControls by remember { mutableStateOf(false) }
     var showToc by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var isExiting by remember { mutableStateOf(false) }
 
-    var fontSize by remember { mutableIntStateOf(22) }
-    var currentTheme by remember { mutableStateOf(ReaderTheme.Cinematic) }
-    var isVertical by remember { mutableStateOf(false) }
-    val isSerif by remember { mutableStateOf(false) }
-    val brightness by remember { mutableFloatStateOf(1f) }
-    var lineSpacing by remember { mutableFloatStateOf(1.8f) }
+    var fontSize by remember { mutableIntStateOf(28) }
+    var currentTheme by remember { mutableStateOf(ReaderTheme.NightBlack) }
+    var lineSpacing by remember { mutableFloatStateOf(1.7f) }
     var paragraphSpacing by remember { mutableIntStateOf(16) }
+    var draftFontSize by remember { mutableIntStateOf(fontSize) }
+    var draftTheme by remember { mutableStateOf(currentTheme) }
+    var draftLineSpacing by remember { mutableFloatStateOf(lineSpacing) }
+    var draftParagraphSpacing by remember { mutableIntStateOf(paragraphSpacing) }
+    var readerViewportSize by remember { mutableStateOf(IntSize.Zero) }
 
     val readerPanelRequester = remember { FocusRequester() }
-    val prevPageRequester = remember { FocusRequester() }
-    val tocButtonRequester = remember { FocusRequester() }
-    val settingsButtonRequester = remember { FocusRequester() }
-    val nextPageRequester = remember { FocusRequester() }
+    val controlPrimaryRequester = remember { FocusRequester() }
     val tocFirstItemRequester = remember { FocusRequester() }
     val settingsFirstRowRequester = remember { FocusRequester() }
 
     val scope = rememberCoroutineScope()
     val textMeasurer = rememberTextMeasurer()
     val pagerState = rememberPagerState(pageCount = { maxOf(1, pages.size) })
+
+    val textStyle = TextStyle(
+        fontSize = fontSize.sp,
+        lineHeight = (fontSize * lineSpacing).sp,
+        color = currentTheme.textColor,
+        letterSpacing = 0.4.sp,
+        textAlign = TextAlign.Justify,
+        fontFamily = FontFamily.Serif,
+        shadow = Shadow(
+            color = Color.Black.copy(alpha = if (currentTheme == ReaderTheme.NightBlack) 0.28f else 0.08f),
+            offset = Offset(0f, 2f),
+            blurRadius = 4f,
+        ),
+    )
+
+    val immersive = !showControls && !showToc && !showSettings
 
     LaunchedEffect(showControls, showToc, showSettings, isLoaded) {
         if (!isLoaded) return@LaunchedEffect
@@ -131,46 +151,42 @@ fun ReaderScreen(
             when {
                 showToc -> tocFirstItemRequester.requestFocus()
                 showSettings -> settingsFirstRowRequester.requestFocus()
-                showControls -> prevPageRequester.requestFocus()
+                showControls -> controlPrimaryRequester.requestFocus()
                 else -> readerPanelRequester.requestFocus()
             }
         }
     }
 
-    val textStyle = TextStyle(
-        fontSize = fontSize.sp,
-        lineHeight = (fontSize * lineSpacing).sp,
-        color = currentTheme.textColor,
-        letterSpacing = 1.sp,
-        textAlign = TextAlign.Justify,
-        fontFamily = if (isSerif) FontFamily.Serif else FontFamily.SansSerif,
-    )
-
-    LaunchedEffect(isLoaded, fontSize, currentTheme, lineSpacing) {
-        if (isLoaded && pages.isEmpty()) {
-            val constraints = Constraints(
-                maxWidth = (1920 - READER_H_PADDING_DP * 2 - READER_COLUMN_GAP_DP) / 2,
-                maxHeight = 1080 - READER_V_PADDING_DP * 2,
-            )
-            viewModel.performPaging(textMeasurer, constraints, textStyle)
-        }
+    LaunchedEffect(isLoaded, pagingRequestVersion, readerViewportSize) {
+        if (!isLoaded || pages.isNotEmpty() || readerViewportSize == IntSize.Zero) return@LaunchedEffect
+        viewModel.performPaging(
+            textMeasurer = textMeasurer,
+            containerConstraints = Constraints(
+                maxWidth = readerViewportSize.width,
+                maxHeight = readerViewportSize.height,
+            ),
+            textStyle = textStyle,
+        )
     }
 
-    LaunchedEffect(pagerState.currentPage, pages) {
+    LaunchedEffect(pagerState.currentPage, pages.size) {
         if (pages.isNotEmpty()) {
             viewModel.onPageChanged(pagerState.currentPage)
         }
     }
 
-    LaunchedEffect(pages.size, snapToEndAfterPaging) {
+    LaunchedEffect(pages.size, pendingPageIndex) {
         if (pages.isEmpty()) return@LaunchedEffect
         when {
-            snapToEndAfterPaging -> {
-                pagerState.scrollToPage(pages.lastIndex)
-                viewModel.onPageChanged(pages.lastIndex)
-                viewModel.consumeSnapToEndFlag()
+            pendingPageIndex != null -> {
+                val targetIndex = pendingPageIndex!!.coerceIn(0, pages.lastIndex)
+                pagerState.scrollToPage(targetIndex)
+                viewModel.onPageChanged(targetIndex)
+                viewModel.consumePendingPageIndex()
             }
-            pagerState.currentPage > pages.lastIndex -> pagerState.scrollToPage(pages.lastIndex)
+            pagerState.currentPage > pages.lastIndex -> {
+                pagerState.scrollToPage(pages.lastIndex)
+            }
         }
     }
 
@@ -192,8 +208,19 @@ fun ReaderScreen(
         }
     }
 
-    val nowText = remember { LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")) }
-    val immersive = !showControls && !showToc && !showSettings
+    var nowText by remember { mutableStateOf(LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            nowText = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+            delay(60_000)
+        }
+    }
+
+    fun exitReader() {
+        if (isExiting) return
+        isExiting = true
+        viewModel.saveProgressBeforeExit(onBackPressed)
+    }
 
     Box(
         modifier = modifier
@@ -207,30 +234,35 @@ fun ReaderScreen(
                         if (immersive) {
                             showControls = true
                             true
-                        } else false
+                        } else {
+                            false
+                        }
                     }
+
                     KeyEvent.KEYCODE_BACK -> {
                         when {
                             showToc -> showToc = false
                             showSettings -> showSettings = false
                             showControls -> showControls = false
-                            else -> {
-                                viewModel.saveProgress()
-                                onBackPressed()
-                            }
+                            else -> exitReader()
                         }
                         true
                     }
-                    KeyEvent.KEYCODE_DPAD_LEFT -> {
-                        if (immersive && !isVertical) {
-                            moveBackward(); true
-                        } else false
+
+                    KeyEvent.KEYCODE_DPAD_LEFT -> if (immersive) {
+                        moveBackward()
+                        true
+                    } else {
+                        false
                     }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        if (immersive && !isVertical) {
-                            moveForward(); true
-                        } else false
+
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> if (immersive) {
+                        moveForward()
+                        true
+                    } else {
+                        false
                     }
+
                     else -> false
                 }
             }
@@ -240,7 +272,12 @@ fun ReaderScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = READER_H_PADDING_DP.dp, vertical = READER_V_PADDING_DP.dp),
+                .padding(horizontal = READER_HORIZONTAL_PADDING.dp, vertical = READER_VERTICAL_PADDING.dp)
+                .onSizeChanged { newSize ->
+                    if (newSize.width > 0 && newSize.height > 0 && newSize != readerViewportSize) {
+                        readerViewportSize = newSize
+                    }
+                },
         ) {
             when {
                 !isLoaded -> LoadingText(
@@ -248,34 +285,29 @@ fun ReaderScreen(
                     color = currentTheme.textColor,
                     modifier = Modifier.align(Alignment.Center),
                 )
+
                 isPaging -> LoadingText(
                     text = "排版中…",
                     color = currentTheme.textColor,
                     modifier = Modifier.align(Alignment.Center),
                 )
-                pages.isEmpty() -> Text(
-                    "内容为空",
+
+                pages.isEmpty() -> LoadingText(
+                    text = "准备正文中…",
                     color = currentTheme.textColor,
-                    style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.align(Alignment.Center),
                 )
+
                 else -> HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
                     userScrollEnabled = false,
-                    pageSpacing = READER_COLUMN_GAP_DP.dp,
                 ) { index ->
-                    val pageText = pages.getOrNull(index).orEmpty()
-                    val mid = pageText.length / 2
-                    val leftText = pageText.substring(0, mid)
-                    val rightText = pageText.substring(mid)
-                    Row(
+                    ReaderPageContent(
+                        page = pages[index],
+                        textStyle = textStyle,
                         modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(READER_COLUMN_GAP_DP.dp),
-                    ) {
-                        Text(text = leftText, style = textStyle, modifier = Modifier.weight(1f))
-                        Text(text = rightText, style = textStyle, modifier = Modifier.weight(1f))
-                    }
+                    )
                 }
             }
         }
@@ -291,22 +323,17 @@ fun ReaderScreen(
                     .fillMaxWidth()
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent),
+                            colors = listOf(Color.Black.copy(alpha = 0.78f), Color.Transparent),
                         ),
                     )
-                    .padding(horizontal = 48.dp, vertical = 24.dp),
+                    .padding(horizontal = 52.dp, vertical = 24.dp),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column {
-                        Text(
-                            "正在阅读",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.45f),
-                        )
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             text = bookTitle,
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
@@ -314,35 +341,35 @@ fun ReaderScreen(
                         )
                         Text(
                             text = currentChapterTitle,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Color.White.copy(alpha = 0.65f),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = Color.White.copy(alpha = 0.66f),
                         )
                     }
+
                     Surface(
                         colors = SurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.08f)),
                         shape = MaterialTheme.shapes.small,
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             Text(
                                 text = String.format(Locale.ROOT, "%.0f%%", totalProgress * 100),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = Color.White,
                             )
-                            Spacer(Modifier.width(12.dp))
                             Icon(
-                                Icons.Default.AccessTime,
+                                imageVector = Icons.Default.AccessTime,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
                                 tint = Color.White.copy(alpha = 0.6f),
                             )
-                            Spacer(Modifier.width(6.dp))
                             Text(
                                 text = nowText,
                                 style = MaterialTheme.typography.labelMedium,
-                                color = Color.White.copy(alpha = 0.8f),
+                                color = Color.White.copy(alpha = 0.82f),
                             )
                         }
                     }
@@ -361,10 +388,10 @@ fun ReaderScreen(
                     .fillMaxWidth()
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)),
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.88f)),
                         ),
                     )
-                    .padding(horizontal = 48.dp, vertical = 24.dp),
+                    .padding(horizontal = 52.dp, vertical = 24.dp),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -372,78 +399,72 @@ fun ReaderScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = String.format(Locale.ROOT, "%.0f%% 已读", totalProgress * 100),
+                        text = "第 ${pagerState.currentPage + 1} 页 / ${pages.size.coerceAtLeast(1)} 页",
                         style = MaterialTheme.typography.labelLarge,
-                        color = Color.White,
+                        color = Color.White.copy(alpha = 0.92f),
                     )
                     Text(
-                        text = currentChapterTitle,
+                        text = "左右键翻页，确定键呼出菜单",
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = Color.White.copy(alpha = 0.56f),
                     )
                 }
-                Spacer(Modifier.height(18.dp))
+
+                Spacer(modifier = Modifier.height(18.dp))
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusGroup(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     ControlButton(
-                        icon = Icons.Default.ChevronLeft,
-                        label = "上一页",
-                        onClick = { moveBackward() },
+                        icon = Icons.Default.AutoStories,
+                        label = "目录",
+                        onClick = {
+                            draftFontSize = fontSize
+                            draftTheme = currentTheme
+                            draftLineSpacing = lineSpacing
+                            draftParagraphSpacing = paragraphSpacing
+                            showToc = true
+                            showControls = false
+                        },
                         modifier = Modifier
-                            .focusRequester(prevPageRequester)
+                            .focusRequester(controlPrimaryRequester)
                             .focusProperties {
                                 left = FocusRequester.Cancel
                                 up = FocusRequester.Cancel
                                 down = FocusRequester.Cancel
                             },
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                        ControlButton(
-                            icon = Icons.Default.AutoStories,
-                            label = "目录",
-                            onClick = {
-                                showToc = true
-                                showControls = false
-                            },
-                            modifier = Modifier
-                                .focusRequester(tocButtonRequester)
-                                .focusProperties {
-                                    up = FocusRequester.Cancel
-                                    down = FocusRequester.Cancel
-                                },
-                        )
-                        ControlButton(
-                            icon = Icons.Default.Settings,
-                            label = "设置",
-                            onClick = {
-                                showSettings = true
-                                showControls = false
-                            },
-                            modifier = Modifier
-                                .focusRequester(settingsButtonRequester)
-                                .focusProperties {
-                                    up = FocusRequester.Cancel
-                                    down = FocusRequester.Cancel
-                                },
-                        )
-                    }
+
                     ControlButton(
-                        icon = Icons.Default.ChevronRight,
-                        label = "下一页",
-                        trailingIcon = true,
-                        onClick = { moveForward() },
-                        modifier = Modifier
-                            .focusRequester(nextPageRequester)
-                            .focusProperties {
-                                right = FocusRequester.Cancel
-                                up = FocusRequester.Cancel
-                                down = FocusRequester.Cancel
-                            },
+                        icon = Icons.Default.Settings,
+                        label = "设置",
+                        onClick = {
+                            draftFontSize = fontSize
+                            draftTheme = currentTheme
+                            draftLineSpacing = lineSpacing
+                            draftParagraphSpacing = paragraphSpacing
+                            showSettings = true
+                            showControls = false
+                        },
+                        modifier = Modifier.focusProperties {
+                            up = FocusRequester.Cancel
+                            down = FocusRequester.Cancel
+                        },
+                    )
+
+                    ControlButton(
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        label = "退出",
+                        onClick = { exitReader() },
+                        modifier = Modifier.focusProperties {
+                            right = FocusRequester.Cancel
+                            up = FocusRequester.Cancel
+                            down = FocusRequester.Cancel
+                        },
                     )
                 }
             }
@@ -456,19 +477,37 @@ fun ReaderScreen(
             modifier = Modifier.align(Alignment.CenterEnd),
         ) {
             ReaderSettingsOverlay(
-                currentFontSize = fontSize,
-                currentTheme = currentTheme,
-                isVertical = isVertical,
-                currentLineSpacing = lineSpacing,
-                currentParagraphSpacing = paragraphSpacing,
+                currentFontSize = draftFontSize,
+                currentTheme = draftTheme,
+                currentLineSpacing = draftLineSpacing,
+                currentParagraphSpacing = draftParagraphSpacing,
                 firstItemRequester = settingsFirstRowRequester,
-                onFontSizeChange = { fontSize = it },
-                onThemeChange = { currentTheme = it },
-                onFlipModeChange = { isVertical = it },
-                onLineSpacingChange = { lineSpacing = it },
-                onParagraphSpacingChange = { paragraphSpacing = it },
-                onConfirm = { showSettings = false; showControls = true },
-                onDismiss = { showSettings = false; showControls = true },
+                onFontSizeChange = { draftFontSize = it },
+                onThemeChange = { draftTheme = it },
+                onLineSpacingChange = { draftLineSpacing = it },
+                onParagraphSpacingChange = { draftParagraphSpacing = it },
+                onConfirm = {
+                    val needsRepagination = draftFontSize != fontSize ||
+                        draftLineSpacing != lineSpacing ||
+                        draftParagraphSpacing != paragraphSpacing
+                    fontSize = draftFontSize
+                    currentTheme = draftTheme
+                    lineSpacing = draftLineSpacing
+                    paragraphSpacing = draftParagraphSpacing
+                    if (needsRepagination) {
+                        viewModel.repaginateFromCurrentPosition(paragraphSpacing)
+                    }
+                    showSettings = false
+                    showControls = true
+                },
+                onDismiss = {
+                    draftFontSize = fontSize
+                    draftTheme = currentTheme
+                    draftLineSpacing = lineSpacing
+                    draftParagraphSpacing = paragraphSpacing
+                    showSettings = false
+                    showControls = true
+                },
             )
         }
 
@@ -481,14 +520,14 @@ fun ReaderScreen(
             Surface(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(400.dp)
+                    .width(420.dp)
                     .focusProperties {
                         left = FocusRequester.Cancel
                         right = FocusRequester.Cancel
                     },
                 colors = SurfaceDefaults.colors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    containerColor = Color(0xFF171717),
+                    contentColor = Color.White,
                 ),
             ) {
                 Column(
@@ -497,11 +536,13 @@ fun ReaderScreen(
                         .padding(24.dp),
                 ) {
                     Text(
-                        "章节目录",
+                        text = "章节目录",
                         style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     )
-                    Spacer(Modifier.height(12.dp))
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
                     LazyColumn(
                         modifier = Modifier
                             .weight(1f)
@@ -513,13 +554,14 @@ fun ReaderScreen(
                                 onClick = {
                                     viewModel.jumpToOffset(chapter.offset)
                                     showToc = false
-                                    showControls = true
+                                    showControls = false
                                 },
                                 modifier = if (index == 0) Modifier.focusRequester(tocFirstItemRequester) else Modifier,
                                 colors = ClickableSurfaceDefaults.colors(
                                     containerColor = Color.White.copy(alpha = 0.05f),
                                     focusedContainerColor = Color.White,
                                     focusedContentColor = Color.Black,
+                                    contentColor = Color.White,
                                 ),
                                 shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.medium),
                             ) {
@@ -536,14 +578,6 @@ fun ReaderScreen(
                 }
             }
         }
-
-        if (brightness < 1.0f) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 1.0f - brightness)),
-            )
-        }
     }
 }
 
@@ -553,7 +587,6 @@ private fun ControlButton(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    trailingIcon: Boolean = false,
 ) {
     Surface(
         onClick = onClick,
@@ -567,27 +600,22 @@ private fun ControlButton(
         shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.large),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 18.dp),
+            modifier = Modifier.padding(horizontal = 26.dp, vertical = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (!trailingIcon) {
-                Icon(icon, contentDescription = label, modifier = Modifier.size(20.dp))
-                Text(label, style = MaterialTheme.typography.labelLarge)
-            } else {
-                Text(label, style = MaterialTheme.typography.labelLarge)
-                Icon(icon, contentDescription = label, modifier = Modifier.size(20.dp))
-            }
+            Icon(imageVector = icon, contentDescription = label, modifier = Modifier.size(20.dp))
+            Text(text = label, style = MaterialTheme.typography.labelLarge)
         }
     }
 }
 
-private const val READER_H_PADDING_DP = 80
-private const val READER_V_PADDING_DP = 60
-private const val READER_COLUMN_GAP_DP = 60
-
 @Composable
-private fun LoadingText(text: String, color: Color, modifier: Modifier = Modifier) {
+private fun LoadingText(
+    text: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
     Text(
         text = text,
         color = color,
@@ -595,3 +623,21 @@ private fun LoadingText(text: String, color: Color, modifier: Modifier = Modifie
         modifier = modifier,
     )
 }
+
+@Composable
+private fun ReaderPageContent(
+    page: ReaderPage,
+    textStyle: TextStyle,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        Text(
+            text = page.content,
+            style = textStyle,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
+private const val READER_HORIZONTAL_PADDING = 72
+private const val READER_VERTICAL_PADDING = 56

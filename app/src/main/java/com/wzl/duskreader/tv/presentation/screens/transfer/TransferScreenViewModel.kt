@@ -2,31 +2,53 @@ package com.wzl.duskreader.tv.presentation.screens.transfer
 
 import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.wzl.duskreader.tv.network.FileTransferServer
+import com.wzl.duskreader.tv.network.TransferServerSnapshot
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
 @HiltViewModel
 class TransferScreenViewModel @Inject constructor(
-    fileTransferServer: FileTransferServer,
+    private val fileTransferServer: FileTransferServer,
 ) : ViewModel() {
 
-    val uiState: TransferScreenUiState = run {
-        val ip = fileTransferServer.getLocalIpAddress()
-        val port = FileTransferServer.DEFAULT_PORT
-        if (ip.isNullOrBlank()) {
-            TransferScreenUiState.Unavailable
-        } else {
-            val url = "http://$ip:$port"
-            TransferScreenUiState.Ready(
-                url = url,
-                qrCode = generateQrCode(url, 512),
-            )
-        }
+    val uiState: StateFlow<TransferScreenUiState> = fileTransferServer.snapshot
+        .map(::snapshotToUiState)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = snapshotToUiState(fileTransferServer.refresh()),
+        )
+
+    fun refresh() {
+        fileTransferServer.refresh()
+    }
+}
+
+private fun snapshotToUiState(snapshot: TransferServerSnapshot): TransferScreenUiState {
+    return if (snapshot.isRunning && snapshot.url != null) {
+        TransferScreenUiState.Ready(
+            url = snapshot.url,
+            helperMessage = snapshot.message,
+            qrCode = generateQrCode(snapshot.url, 512),
+            lastUploadMessage = snapshot.lastUploadMessage,
+            lastUploadAtMillis = snapshot.lastUploadAtMillis,
+        )
+    } else {
+        TransferScreenUiState.Unavailable(
+            message = snapshot.message,
+            lastUploadMessage = snapshot.lastUploadMessage,
+            lastUploadAtMillis = snapshot.lastUploadAtMillis,
+        )
     }
 }
 
@@ -47,6 +69,17 @@ private fun generateQrCode(content: String, sizePx: Int): Bitmap {
 }
 
 sealed interface TransferScreenUiState {
-    data object Unavailable : TransferScreenUiState
-    data class Ready(val url: String, val qrCode: Bitmap) : TransferScreenUiState
+    data class Unavailable(
+        val message: String,
+        val lastUploadMessage: String? = null,
+        val lastUploadAtMillis: Long? = null,
+    ) : TransferScreenUiState
+
+    data class Ready(
+        val url: String,
+        val helperMessage: String,
+        val qrCode: Bitmap,
+        val lastUploadMessage: String? = null,
+        val lastUploadAtMillis: Long? = null,
+    ) : TransferScreenUiState
 }

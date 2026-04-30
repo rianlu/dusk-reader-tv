@@ -43,15 +43,7 @@ class BookRepositoryImpl @Inject constructor(
         for (file in files) {
             if (!file.isFile || file.extension.lowercase() !in SUPPORTED_EXTENSIONS) continue
             if (bookDao.getBookByPath(file.absolutePath) == null) {
-                bookDao.insertBook(
-                    Book(
-                        title = file.nameWithoutExtension,
-                        path = file.absolutePath,
-                        format = file.extension.uppercase(),
-                        fileSize = file.length(),
-                        totalSize = file.length()
-                    )
-                )
+                bookDao.insertBook(buildImportedBook(file))
                 importedCount++
             }
         }
@@ -68,16 +60,18 @@ class BookRepositoryImpl @Inject constructor(
             }
         }
         if (bookDao.getBookByPath(defaultFile.absolutePath) == null) {
-            bookDao.insertBook(
-                Book(
-                    title = "欢迎使用暮阅",
-                    path = defaultFile.absolutePath,
-                    format = "TXT",
-                    fileSize = defaultFile.length(),
-                    totalSize = defaultFile.length()
-                )
-            )
+            bookDao.insertBook(buildImportedBook(defaultFile).copy(title = "欢迎使用暮阅"))
         }
+    }
+
+    private fun buildImportedBook(file: File): Book {
+        return Book(
+            title = file.nameWithoutExtension,
+            path = file.absolutePath,
+            format = file.extension.uppercase(),
+            fileSize = file.length(),
+            totalSize = file.length()
+        )
     }
 
     private fun resolveBookDir(createIfMissing: Boolean = false): File? {

@@ -205,6 +205,7 @@ private fun Body(
         composable(Screens.Home()) {
             HomeScreen(
                 onBookClick = { book -> openBookDetailsScreen(book.id) },
+                onGoTransfer = { navController.navigate(Screens.Transfer()) },
                 onScroll = updateTopBarVisibility,
                 isTopBarVisible = isTopBarVisible,
             )
@@ -212,6 +213,7 @@ private fun Body(
         composable(Screens.Library()) {
             LibraryScreen(
                 onBookClick = { book -> openBookDetailsScreen(book.id) },
+                onGoTransfer = { navController.navigate(Screens.Transfer()) },
                 onScroll = updateTopBarVisibility,
                 isTopBarVisible = isTopBarVisible,
             )

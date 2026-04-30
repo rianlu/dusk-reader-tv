@@ -4,13 +4,13 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Glow
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.StandardCardContainer
 import androidx.tv.material3.Surface
-import com.wzl.duskreader.tv.presentation.theme.JetStreamBorderWidth
-import com.wzl.duskreader.tv.presentation.theme.JetStreamCardShape
 
 @Composable
 fun BookCard(
@@ -25,17 +25,23 @@ fun BookCard(
         imageCard = {
             Surface(
                 onClick = onClick,
-                shape = ClickableSurfaceDefaults.shape(JetStreamCardShape),
+                shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.medium),
                 border = ClickableSurfaceDefaults.border(
                     focusedBorder = Border(
                         border = BorderStroke(
-                            width = JetStreamBorderWidth,
+                            width = 2.dp,
                             color = MaterialTheme.colorScheme.onSurface,
                         ),
-                        shape = JetStreamCardShape,
+                        shape = MaterialTheme.shapes.medium,
                     ),
                 ),
-                scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
+                glow = ClickableSurfaceDefaults.glow(
+                    focusedGlow = Glow(
+                        elevation = 12.dp,
+                        elevationColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
+                    ),
+                ),
+                scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
                 content = image,
             )
         },

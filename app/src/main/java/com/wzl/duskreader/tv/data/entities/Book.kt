@@ -16,6 +16,7 @@ data class Book(
     val author: String? = null,
     val path: String,
     val coverPath: String? = null,
+    val backdropPath: String? = null,
     val description: String? = null,
     val format: String,
     val tags: List<String> = emptyList(),
@@ -26,3 +27,9 @@ data class Book(
     val lastReadTime: Long = System.currentTimeMillis(),
     val totalSize: Long = 0
 )
+
+fun Book.preferredBackdropPath(): String? = when {
+    !backdropPath.isNullOrBlank() -> backdropPath
+    !coverPath.isNullOrBlank() -> coverPath
+    else -> null
+}

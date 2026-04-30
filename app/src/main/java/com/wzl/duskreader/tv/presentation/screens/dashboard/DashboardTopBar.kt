@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.runtime.Composable
@@ -27,12 +27,15 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Surface
+import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Tab
 import androidx.tv.material3.TabRow
 import androidx.tv.material3.Text
@@ -57,56 +60,74 @@ fun DashboardTopBar(
 ) {
     val focusManager = LocalFocusManager.current
     Box(modifier = modifier) {
-        Row(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 16.dp)
-                .background(MaterialTheme.colorScheme.surface)
+                .padding(top = 12.dp)
                 .focusRestorer(),
-            verticalAlignment = Alignment.CenterVertically,
+            shape = MaterialTheme.shapes.large,
+            colors = SurfaceDefaults.colors(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+            ),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                var isTabRowFocused by remember { mutableStateOf(false) }
-
-                TabRow(
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                DuskReaderLogo(
                     modifier = Modifier
-                        .onFocusChanged {
-                            isTabRowFocused = it.isFocused || it.hasFocus
+                        .alpha(0.88f)
+                        .widthIn(min = 112.dp),
+                )
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    var isTabRowFocused by remember { mutableStateOf(false) }
+
+                    TabRow(
+                        modifier = Modifier
+                            .background(Color.Transparent)
+                            .onFocusChanged {
+                                isTabRowFocused = it.isFocused || it.hasFocus
+                            },
+                        selectedTabIndex = selectedTabIndex,
+                        indicator = { tabPositions, _ ->
+                            if (selectedTabIndex >= 0) {
+                                DashboardTopBarItemIndicator(
+                                    currentTabPosition = tabPositions[selectedTabIndex],
+                                    anyTabFocused = isTabRowFocused,
+                                    shape = JetStreamCardShape,
+                                )
+                            }
                         },
-                    selectedTabIndex = selectedTabIndex,
-                    indicator = { tabPositions, _ ->
-                        if (selectedTabIndex >= 0) {
-                            DashboardTopBarItemIndicator(
-                                currentTabPosition = tabPositions[selectedTabIndex],
-                                anyTabFocused = isTabRowFocused,
-                                shape = JetStreamCardShape,
-                            )
-                        }
-                    },
-                    separator = { Spacer(modifier = Modifier) },
-                ) {
-                    screens.forEachIndexed { index, screen ->
-                        key(index) {
-                            Tab(
-                                modifier = Modifier
-                                    .height(40.dp)
-                                    .focusRequester(focusRequesters[index]),
-                                selected = index == selectedTabIndex,
-                                onFocus = { onScreenSelection(screen) },
-                                onClick = { focusManager.moveFocus(FocusDirection.Down) },
-                            ) {
-                                TabContent(screen = screen)
+                        separator = { Spacer(modifier = Modifier) },
+                    ) {
+                        screens.forEachIndexed { index, screen ->
+                            key(index) {
+                                Tab(
+                                    modifier = Modifier
+                                        .height(40.dp)
+                                        .focusRequester(focusRequesters[index]),
+                                    selected = index == selectedTabIndex,
+                                    onFocus = { onScreenSelection(screen) },
+                                    onClick = { focusManager.moveFocus(FocusDirection.Down) },
+                                ) {
+                                    TabContent(screen = screen)
+                                }
                             }
                         }
                     }
                 }
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = "本地书库",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.52f),
+                )
             }
-            Spacer(modifier = Modifier.weight(1f))
-            DuskReaderLogo(
-                modifier = Modifier
-                    .alpha(0.75f)
-                    .padding(end = 8.dp),
-            )
         }
     }
 }

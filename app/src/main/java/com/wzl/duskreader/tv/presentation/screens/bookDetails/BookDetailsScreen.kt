@@ -1,10 +1,10 @@
 package com.wzl.duskreader.tv.presentation.screens.bookDetails
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -17,12 +17,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,14 +37,14 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.wzl.duskreader.tv.data.entities.Book
+import com.wzl.duskreader.tv.data.entities.progressRatio
+import com.wzl.duskreader.tv.presentation.common.BookBackdrop
 import com.wzl.duskreader.tv.presentation.common.BookCover
 import com.wzl.duskreader.tv.presentation.common.Error
 import com.wzl.duskreader.tv.presentation.common.Loading
 import com.wzl.duskreader.tv.presentation.screens.dashboard.rememberChildPadding
 import com.wzl.duskreader.tv.presentation.theme.JetStreamButtonShape
 import java.util.Locale
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 
 object BookDetailsScreen {
     const val BookIdBundleKey = "bookId"
@@ -84,86 +87,115 @@ private fun Details(
         startButtonFocus.requestFocus()
     }
 
-    Row(
-        modifier = modifier
-            .padding(
-                start = childPadding.start,
-                end = childPadding.end,
-                top = 48.dp,
-                bottom = childPadding.bottom,
-            ),
-        horizontalArrangement = Arrangement.spacedBy(40.dp),
-    ) {
-        BookCover(
+    Box(modifier = modifier.fillMaxSize()) {
+        BookBackdrop(
             book = book,
-            modifier = Modifier
-                .width(240.dp)
-                .aspectRatio(10.5f / 16f),
+            modifier = Modifier.fillMaxSize(),
         )
-
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = book.title,
-                style = MaterialTheme.typography.displaySmall.copy(
-                    fontWeight = FontWeight.Bold,
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.82f),
+                            Color.Black.copy(alpha = 0.56f),
+                            Color.Transparent,
+                        ),
+                    ),
                 ),
-                maxLines = 2,
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.12f),
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.66f),
+                        ),
+                    ),
+                ),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    start = childPadding.start,
+                    end = childPadding.end,
+                    top = 48.dp,
+                    bottom = childPadding.bottom,
+                ),
+            horizontalArrangement = Arrangement.spacedBy(36.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BookCover(
+                book = book,
+                modifier = Modifier
+                    .width(260.dp)
+                    .aspectRatio(10.5f / 16f),
             )
-            if (!book.author.isNullOrBlank()) {
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
                 Text(
-                    text = "作者：${book.author}",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier
-                        .padding(top = 12.dp)
-                        .alpha(0.75f),
+                    text = book.title,
+                    style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White,
+                    maxLines = 2,
+                )
+                if (!book.author.isNullOrBlank()) {
+                    Text(
+                        text = book.author,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color.White.copy(alpha = 0.76f),
+                    )
+                }
+                MetaRow(book = book)
+                if (!book.description.isNullOrBlank()) {
+                    Text(
+                        text = book.description,
+                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp),
+                        color = Color.White.copy(alpha = 0.82f),
+                        maxLines = 5,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                StartReadingButton(
+                    modifier = Modifier.focusRequester(startButtonFocus),
+                    hasProgress = book.lastReadPosition > 0,
+                    onClick = onStartReading,
                 )
             }
-            Spacer(Modifier.height(20.dp))
-            MetaRow(book = book)
-            if (!book.description.isNullOrBlank()) {
-                Text(
-                    text = book.description,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
-                    modifier = Modifier
-                        .padding(top = 24.dp)
-                        .alpha(0.85f),
-                    maxLines = 6,
-                )
-            }
-            Spacer(Modifier.height(32.dp))
-            StartReadingButton(
-                modifier = Modifier.focusRequester(startButtonFocus),
-                hasProgress = book.lastReadPosition > 0,
-                onClick = onStartReading,
-            )
         }
     }
 }
 
 @Composable
 private fun MetaRow(book: Book) {
-    Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
         MetaItem(label = "格式", value = book.format.uppercase(Locale.ROOT))
         MetaItem(label = "大小", value = formatFileSize(book.fileSize))
-        val progress = progressPercent(book)
-        if (progress != null) {
-            MetaItem(label = "进度", value = progress)
-        }
+        progressPercent(book)?.let { MetaItem(label = "进度", value = it) }
+        MetaItem(label = "导入", value = "本地书库")
     }
 }
 
 @Composable
 private fun MetaItem(label: String, value: String) {
-    Column {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.alpha(0.6f),
+            style = MaterialTheme.typography.labelMedium,
+            color = Color.White.copy(alpha = 0.52f),
         )
         Text(
             text = value,
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-            modifier = Modifier.padding(top = 4.dp),
+            color = Color.White,
         )
     }
 }
@@ -198,9 +230,7 @@ private fun formatFileSize(bytes: Long): String {
 }
 
 private fun progressPercent(book: Book): String? {
-    val total = book.totalSize
-    if (total <= 0L) return null
     if (book.lastReadPosition <= 0) return null
-    val pct = (book.lastReadPosition.toDouble() / total.toDouble() * 100).coerceIn(0.0, 100.0)
+    val pct = (book.progressRatio() * 100).coerceIn(0f, 100f)
     return String.format(Locale.ROOT, "%.0f%%", pct)
 }

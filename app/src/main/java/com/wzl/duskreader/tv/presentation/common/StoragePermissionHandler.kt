@@ -84,8 +84,13 @@ fun StoragePermissionHandler(
                 Text("「暮阅」需要存储权限", style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "用于扫描 Documents/暮阅 目录下的 TXT 书籍",
+                    "用于扫描 Documents/暮阅 目录下的 TXT / EPUB 书籍",
                     style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "授权后会自动扫描书库；如果是首次使用，请先在系统设置中允许访问全部文件。",
+                    style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(Modifier.height(20.dp))
                 Button(
