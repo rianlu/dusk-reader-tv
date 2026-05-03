@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @HiltViewModel
@@ -20,8 +21,13 @@ class SettingsScreenViewModel @Inject constructor(
     fun rescanLibrary() {
         viewModelScope.launch {
             runCatching {
-                val count = bookRepository.scanLocalStorage()
-                _rescanSummary.value = "扫描完成，当前识别到 $count 本书"
+                val imported = bookRepository.scanLocalStorage()
+                val total = bookRepository.getAllBooks().first().size
+                _rescanSummary.value = if (imported > 0) {
+                    "扫描完成，新增 $imported 本，共 $total 本"
+                } else {
+                    "扫描完成，共 $total 本（无新增）"
+                }
             }.onFailure { error ->
                 _rescanSummary.value = "扫描失败：${error.message ?: "未知错误"}"
             }
