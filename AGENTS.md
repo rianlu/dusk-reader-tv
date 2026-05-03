@@ -1,10 +1,29 @@
-# 项目经验补充
+<!-- TRELLIS:START -->
+# Trellis Instructions
 
-## KSP 构建验证冲突
+These instructions are for AI assistants working in this project.
 
-- 标题：KSP / Hilt / Room 生成链不要并行跑 `testDebugUnitTest` 和 `assembleDebug`
-- 触发信号：同一轮验证里并行运行 `./gradlew testDebugUnitTest` 与 `./gradlew assembleDebug` 后，出现 `kspDebugKotlin` 的 `FileAlreadyExistsException`、`NoSuchFileException`、`byRounds` 目录异常，或 Kotlin/KSP 增量缓存伪失败
-- 根因 / 约束：当前项目的 KSP 生成目录会被并行 Gradle 任务共享，`testDebugUnitTest` 与 `assembleDebug` 同时运行时，Hilt / Room / KSP 输出可能互相踩写，导致构建链失败，但不代表业务代码本身有编译错误
-- 正确做法：验证时串行执行；先 `./gradlew --stop`，必要时 `./gradlew clean`，然后分别单独运行 `./gradlew testDebugUnitTest -Pksp.incremental=false -Dkotlin.incremental=false --no-daemon` 和 `./gradlew assembleDebug -Pksp.incremental=false -Dkotlin.incremental=false --no-daemon`
-- 验证方式：以串行、无增量、无常驻 daemon 的命令结果为准；若两条命令都通过，再认定代码状态通过
-- 适用范围：所有涉及 KSP / Hilt / Room 代码生成的本仓库验证流程
+This project is managed by Trellis. The working knowledge you need lives under `.trellis/`:
+
+- `.trellis/workflow.md` — development phases, when to create tasks, skill routing
+- `.trellis/spec/` — package- and layer-scoped coding guidelines (read before writing code in a given layer)
+- `.trellis/workspace/` — per-developer journals and session traces
+- `.trellis/tasks/` — active and archived tasks (PRDs, research, jsonl context)
+
+If a Trellis command is available on your platform (e.g. `/trellis:finish-work`, `/trellis:continue`), prefer it over manual steps. Not every platform exposes every command.
+
+If you're using Codex or another agent-capable tool, additional project-scoped helpers may live in:
+- `.agents/skills/` — reusable Trellis skills
+- `.codex/agents/` — optional custom subagents
+
+## Subagents
+
+- ALWAYS wait for all subagents to complete before yielding.
+- Spawn subagents automatically when:
+  - Parallelizable work (e.g., install + verify, npm test + typecheck, multiple tasks from plan)
+  - Long-running or blocking tasks where a worker can run independently.
+  - Isolation for risky changes or checks
+
+Managed by Trellis. Edits outside this block are preserved; edits inside may be overwritten by a future `trellis update`.
+
+<!-- TRELLIS:END -->

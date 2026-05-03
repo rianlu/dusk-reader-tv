@@ -41,7 +41,7 @@ fun BookCard(
                         elevationColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
                     ),
                 ),
-                scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
+                scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
                 content = image,
             )
         },

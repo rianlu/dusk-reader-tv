@@ -37,8 +37,8 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.wzl.duskreader.tv.data.entities.Book
+import com.wzl.duskreader.tv.data.entities.hasReadingHistory
 import com.wzl.duskreader.tv.data.entities.progressRatio
-import com.wzl.duskreader.tv.presentation.common.BookBackdrop
 import com.wzl.duskreader.tv.presentation.common.BookCover
 import com.wzl.duskreader.tv.presentation.common.Error
 import com.wzl.duskreader.tv.presentation.common.Loading
@@ -88,9 +88,16 @@ private fun Details(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        BookBackdrop(
-            book = book,
-            modifier = Modifier.fillMaxSize(),
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        0f to Color(0xFF0A0D13),
+                        0.5f to Color(0xFF121926),
+                        1f to Color(0xFF07090E),
+                    ),
+                ),
         )
         Box(
             modifier = Modifier
@@ -166,7 +173,7 @@ private fun Details(
                 Spacer(Modifier.height(8.dp))
                 StartReadingButton(
                     modifier = Modifier.focusRequester(startButtonFocus),
-                    hasProgress = book.lastReadPosition > 0,
+                    hasProgress = book.hasReadingHistory(),
                     onClick = onStartReading,
                 )
             }
@@ -230,7 +237,7 @@ private fun formatFileSize(bytes: Long): String {
 }
 
 private fun progressPercent(book: Book): String? {
-    if (book.lastReadPosition <= 0) return null
+    if (!book.hasReadingHistory()) return null
     val pct = (book.progressRatio() * 100).coerceIn(0f, 100f)
     return String.format(Locale.ROOT, "%.0f%%", pct)
 }

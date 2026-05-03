@@ -14,8 +14,11 @@ interface BookDao {
     @Query("SELECT * FROM books ORDER BY lastReadTime DESC")
     fun getAllBooks(): Flow<List<Book>>
 
-    // 获取最近阅读的若干本书
-    @Query("SELECT * FROM books WHERE lastReadPosition > 0 ORDER BY lastReadTime DESC LIMIT :limit")
+    // 获取最近阅读的若干本书（章节级架构：lastReadChapter 或 lastReadPosition 任一非零都算）
+    @Query(
+        "SELECT * FROM books WHERE lastReadChapter > 0 OR lastReadPosition > 0 " +
+            "ORDER BY lastReadTime DESC LIMIT :limit",
+    )
     fun getRecentBooks(limit: Int): Flow<List<Book>>
 
     // 根据主键 ID 查找单本书

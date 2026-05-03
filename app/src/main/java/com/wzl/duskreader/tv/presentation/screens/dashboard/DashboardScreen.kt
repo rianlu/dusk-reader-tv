@@ -41,9 +41,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.wzl.duskreader.tv.presentation.screens.Screens
-import com.wzl.duskreader.tv.presentation.screens.home.HomeScreen
-import com.wzl.duskreader.tv.presentation.screens.library.LibraryScreen
-import com.wzl.duskreader.tv.presentation.screens.settings.SettingsScreen
+import com.wzl.duskreader.tv.presentation.screens.bookshelf.BookshelfScreen
 import com.wzl.duskreader.tv.presentation.screens.transfer.TransferScreen
 import com.wzl.duskreader.tv.presentation.utils.Padding
 
@@ -200,18 +198,10 @@ private fun Body(
     NavHost(
         modifier = modifier,
         navController = navController,
-        startDestination = Screens.Home(),
+        startDestination = Screens.Bookshelf(),
     ) {
-        composable(Screens.Home()) {
-            HomeScreen(
-                onBookClick = { book -> openBookDetailsScreen(book.id) },
-                onGoTransfer = { navController.navigate(Screens.Transfer()) },
-                onScroll = updateTopBarVisibility,
-                isTopBarVisible = isTopBarVisible,
-            )
-        }
-        composable(Screens.Library()) {
-            LibraryScreen(
+        composable(Screens.Bookshelf()) {
+            BookshelfScreen(
                 onBookClick = { book -> openBookDetailsScreen(book.id) },
                 onGoTransfer = { navController.navigate(Screens.Transfer()) },
                 onScroll = updateTopBarVisibility,
@@ -220,8 +210,5 @@ private fun Body(
         }
         composable(Screens.Transfer()) {
             TransferScreen()
-        }
-        composable(Screens.Settings()) {
-            SettingsScreen()
         }
     }

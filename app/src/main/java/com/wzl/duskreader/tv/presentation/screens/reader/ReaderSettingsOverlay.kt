@@ -19,28 +19,26 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Border
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
@@ -53,21 +51,19 @@ fun ReaderSettingsOverlay(
     currentFontSize: Int,
     currentTheme: ReaderTheme,
     currentLineSpacing: Float,
-    currentParagraphSpacing: Int,
     firstItemRequester: FocusRequester,
     onFontSizeChange: (Int) -> Unit,
     onThemeChange: (ReaderTheme) -> Unit,
     onLineSpacingChange: (Float) -> Unit,
-    onParagraphSpacingChange: (Int) -> Unit,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
 ) {
+    val lineSpacingDecRequester = remember { FocusRequester() }
+    val themeFirstRequester = remember { FocusRequester() }
+
     Box(
         modifier = Modifier
             .fillMaxHeight()
             .width(460.dp)
             .focusGroup()
-            .focusRestorer()
             .focusProperties {
                 left = FocusRequester.Cancel
                 right = FocusRequester.Cancel
@@ -80,24 +76,25 @@ fun ReaderSettingsOverlay(
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 36.dp, vertical = 40.dp),
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 32.dp, vertical = 28.dp),
             ) {
                 Text(
                     text = "阅读设置",
-                    style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                     color = Color.White,
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "调整后选择“确认应用”生效",
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = "调整即时生效，按返回键关闭",
+                    style = MaterialTheme.typography.bodySmall,
                     color = Color.White.copy(alpha = 0.58f),
                 )
 
-                Spacer(modifier = Modifier.height(40.dp))
+                Spacer(modifier = Modifier.height(28.dp))
 
                 StepperField(
                     label = "字体大小",
@@ -105,10 +102,13 @@ fun ReaderSettingsOverlay(
                     onDecrement = { onFontSizeChange((currentFontSize - 2).coerceIn(18, 80)) },
                     onIncrement = { onFontSizeChange((currentFontSize + 2).coerceIn(18, 80)) },
                     decrementRequester = firstItemRequester,
-                    modifier = Modifier.focusProperties { up = FocusRequester.Cancel },
+                    modifier = Modifier.focusProperties {
+                        up = FocusRequester.Cancel
+                        down = lineSpacingDecRequester
+                    },
                 )
 
-                Spacer(modifier = Modifier.height(28.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 StepperField(
                     label = "行间距",
@@ -121,18 +121,13 @@ fun ReaderSettingsOverlay(
                         val next = ((currentLineSpacing * 10).toInt() + 1).coerceAtMost(24)
                         onLineSpacingChange(next / 10f)
                     },
+                    decrementRequester = lineSpacingDecRequester,
+                    modifier = Modifier.focusProperties {
+                        down = themeFirstRequester
+                    },
                 )
 
                 Spacer(modifier = Modifier.height(28.dp))
-
-                StepperField(
-                    label = "段间距",
-                    value = "${currentParagraphSpacing}dp",
-                    onDecrement = { onParagraphSpacingChange((currentParagraphSpacing - 2).coerceIn(8, 32)) },
-                    onIncrement = { onParagraphSpacingChange((currentParagraphSpacing + 2).coerceIn(8, 32)) },
-                )
-
-                Spacer(modifier = Modifier.height(36.dp))
 
                 Text(
                     text = "背景主题",
@@ -140,63 +135,26 @@ fun ReaderSettingsOverlay(
                     style = MaterialTheme.typography.titleMedium,
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Row(
-                    modifier = Modifier.focusGroup(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier
+                        .focusGroup()
+                        .focusProperties { down = FocusRequester.Cancel },
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    ReaderTheme.values().forEach { theme ->
+                    ReaderTheme.values().forEachIndexed { index, theme ->
                         ThemeOption(
                             theme = theme,
                             selected = currentTheme == theme,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .then(
+                                    if (index == 0) Modifier.focusRequester(themeFirstRequester)
+                                    else Modifier
+                                ),
                             onClick = { onThemeChange(theme) },
                         )
-                    }
-                }
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusGroup(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Button(
-                        onClick = onConfirm,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = ButtonDefaults.shape(MaterialTheme.shapes.large),
-                        colors = ButtonDefaults.colors(containerColor = Color.White, contentColor = Color.Black),
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("确认应用", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Spacer(modifier = Modifier.width(10.dp))
-                            androidx.tv.material3.Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Button(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .focusProperties { down = FocusRequester.Cancel },
-                        colors = ButtonDefaults.colors(
-                            containerColor = Color.Transparent,
-                            contentColor = Color.White.copy(alpha = 0.64f),
-                        ),
-                    ) {
-                        Text("取消更改")
                     }
                 }
             }
@@ -302,7 +260,7 @@ private fun ThemeOption(
             onClick = onClick,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(116.dp),
+                .height(92.dp),
             shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.large),
             colors = ClickableSurfaceDefaults.colors(
                 containerColor = Color(0xFF222222),
@@ -318,7 +276,7 @@ private fun ThemeOption(
                 contentAlignment = Alignment.Center,
             ) {
                 Surface(
-                    modifier = Modifier.size(width = 72.dp, height = 84.dp),
+                    modifier = Modifier.size(width = 60.dp, height = 64.dp),
                     shape = MaterialTheme.shapes.medium,
                     colors = SurfaceDefaults.colors(containerColor = theme.bgColor),
                     border = if (theme == ReaderTheme.NightBlack) {

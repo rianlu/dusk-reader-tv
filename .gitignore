@@ -20,3 +20,8 @@ build.log
 build_output.txt
 /.idea/deploymentTargetSelector.xml
 /.idea/misc.xml
+
+# 本地工具配置目录（Claude Code / Cursor / Trellis）
+.claude/
+.cursor/
+.trellis/

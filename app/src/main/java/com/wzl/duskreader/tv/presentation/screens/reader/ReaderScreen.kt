@@ -7,6 +7,8 @@ package com.wzl.duskreader.tv.presentation.screens.reader
 
 import android.view.KeyEvent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -98,7 +100,6 @@ fun ReaderScreen(
     val isLoaded by viewModel.isLoaded.collectAsStateWithLifecycle()
     val chapters by viewModel.chapters.collectAsStateWithLifecycle()
     val totalProgress by viewModel.totalProgress.collectAsStateWithLifecycle()
-    val isPaging by viewModel.isPaging.collectAsStateWithLifecycle()
     val currentChapterTitle by viewModel.currentChapterTitle.collectAsStateWithLifecycle()
     val pagingRequestVersion by viewModel.pagingRequestVersion.collectAsStateWithLifecycle()
     val pendingPageIndex by viewModel.pendingPageIndex.collectAsStateWithLifecycle()
@@ -112,11 +113,6 @@ fun ReaderScreen(
     var fontSize by remember { mutableIntStateOf(28) }
     var currentTheme by remember { mutableStateOf(ReaderTheme.NightBlack) }
     var lineSpacing by remember { mutableFloatStateOf(1.7f) }
-    var paragraphSpacing by remember { mutableIntStateOf(16) }
-    var draftFontSize by remember { mutableIntStateOf(fontSize) }
-    var draftTheme by remember { mutableStateOf(currentTheme) }
-    var draftLineSpacing by remember { mutableFloatStateOf(lineSpacing) }
-    var draftParagraphSpacing by remember { mutableIntStateOf(paragraphSpacing) }
     var readerViewportSize by remember { mutableStateOf(IntSize.Zero) }
 
     val readerPanelRequester = remember { FocusRequester() }
@@ -128,10 +124,21 @@ fun ReaderScreen(
     val textMeasurer = rememberTextMeasurer()
     val pagerState = rememberPagerState(pageCount = { maxOf(1, pages.size) })
 
+    val animatedBgColor by animateColorAsState(
+        targetValue = currentTheme.bgColor,
+        animationSpec = tween(durationMillis = 320),
+        label = "readerBg",
+    )
+    val animatedTextColor by animateColorAsState(
+        targetValue = currentTheme.textColor,
+        animationSpec = tween(durationMillis = 320),
+        label = "readerText",
+    )
+
     val textStyle = TextStyle(
         fontSize = fontSize.sp,
         lineHeight = (fontSize * lineSpacing).sp,
-        color = currentTheme.textColor,
+        color = animatedTextColor,
         letterSpacing = 0.4.sp,
         textAlign = TextAlign.Justify,
         fontFamily = FontFamily.Serif,
@@ -158,7 +165,7 @@ fun ReaderScreen(
     }
 
     LaunchedEffect(isLoaded, pagingRequestVersion, readerViewportSize) {
-        if (!isLoaded || pages.isNotEmpty() || readerViewportSize == IntSize.Zero) return@LaunchedEffect
+        if (!isLoaded || readerViewportSize == IntSize.Zero) return@LaunchedEffect
         viewModel.performPaging(
             textMeasurer = textMeasurer,
             containerConstraints = Constraints(
@@ -167,6 +174,12 @@ fun ReaderScreen(
             ),
             textStyle = textStyle,
         )
+    }
+
+    LaunchedEffect(fontSize, lineSpacing) {
+        if (!isLoaded || pages.isEmpty()) return@LaunchedEffect
+        delay(200)
+        viewModel.repaginate()
     }
 
     LaunchedEffect(pagerState.currentPage, pages.size) {
@@ -195,7 +208,7 @@ fun ReaderScreen(
         if (pagerState.currentPage < pages.lastIndex) {
             scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
         } else {
-            viewModel.loadNextWindow()
+            viewModel.loadNextChapter()
         }
     }
 
@@ -204,7 +217,7 @@ fun ReaderScreen(
         if (pagerState.currentPage > 0) {
             scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
         } else {
-            viewModel.loadPreviousWindow()
+            viewModel.loadPreviousChapter()
         }
     }
 
@@ -225,7 +238,7 @@ fun ReaderScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(currentTheme.bgColor)
+            .background(animatedBgColor)
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (event.nativeKeyEvent.keyCode) {
@@ -242,7 +255,10 @@ fun ReaderScreen(
                     KeyEvent.KEYCODE_BACK -> {
                         when {
                             showToc -> showToc = false
-                            showSettings -> showSettings = false
+                            showSettings -> {
+                                showSettings = false
+                                showControls = true
+                            }
                             showControls -> showControls = false
                             else -> exitReader()
                         }
@@ -282,19 +298,13 @@ fun ReaderScreen(
             when {
                 !isLoaded -> LoadingText(
                     text = "加载中…",
-                    color = currentTheme.textColor,
-                    modifier = Modifier.align(Alignment.Center),
-                )
-
-                isPaging -> LoadingText(
-                    text = "排版中…",
-                    color = currentTheme.textColor,
+                    color = animatedTextColor,
                     modifier = Modifier.align(Alignment.Center),
                 )
 
                 pages.isEmpty() -> LoadingText(
                     text = "准备正文中…",
-                    color = currentTheme.textColor,
+                    color = animatedTextColor,
                     modifier = Modifier.align(Alignment.Center),
                 )
 
@@ -423,10 +433,6 @@ fun ReaderScreen(
                         icon = Icons.Default.AutoStories,
                         label = "目录",
                         onClick = {
-                            draftFontSize = fontSize
-                            draftTheme = currentTheme
-                            draftLineSpacing = lineSpacing
-                            draftParagraphSpacing = paragraphSpacing
                             showToc = true
                             showControls = false
                         },
@@ -443,10 +449,6 @@ fun ReaderScreen(
                         icon = Icons.Default.Settings,
                         label = "设置",
                         onClick = {
-                            draftFontSize = fontSize
-                            draftTheme = currentTheme
-                            draftLineSpacing = lineSpacing
-                            draftParagraphSpacing = paragraphSpacing
                             showSettings = true
                             showControls = false
                         },
@@ -477,37 +479,13 @@ fun ReaderScreen(
             modifier = Modifier.align(Alignment.CenterEnd),
         ) {
             ReaderSettingsOverlay(
-                currentFontSize = draftFontSize,
-                currentTheme = draftTheme,
-                currentLineSpacing = draftLineSpacing,
-                currentParagraphSpacing = draftParagraphSpacing,
+                currentFontSize = fontSize,
+                currentTheme = currentTheme,
+                currentLineSpacing = lineSpacing,
                 firstItemRequester = settingsFirstRowRequester,
-                onFontSizeChange = { draftFontSize = it },
-                onThemeChange = { draftTheme = it },
-                onLineSpacingChange = { draftLineSpacing = it },
-                onParagraphSpacingChange = { draftParagraphSpacing = it },
-                onConfirm = {
-                    val needsRepagination = draftFontSize != fontSize ||
-                        draftLineSpacing != lineSpacing ||
-                        draftParagraphSpacing != paragraphSpacing
-                    fontSize = draftFontSize
-                    currentTheme = draftTheme
-                    lineSpacing = draftLineSpacing
-                    paragraphSpacing = draftParagraphSpacing
-                    if (needsRepagination) {
-                        viewModel.repaginateFromCurrentPosition(paragraphSpacing)
-                    }
-                    showSettings = false
-                    showControls = true
-                },
-                onDismiss = {
-                    draftFontSize = fontSize
-                    draftTheme = currentTheme
-                    draftLineSpacing = lineSpacing
-                    draftParagraphSpacing = paragraphSpacing
-                    showSettings = false
-                    showControls = true
-                },
+                onFontSizeChange = { fontSize = it },
+                onThemeChange = { currentTheme = it },
+                onLineSpacingChange = { lineSpacing = it },
             )
         }
 
@@ -552,7 +530,7 @@ fun ReaderScreen(
                         itemsIndexed(chapters) { index, chapter ->
                             Surface(
                                 onClick = {
-                                    viewModel.jumpToOffset(chapter.offset)
+                                    viewModel.jumpToChapter(chapter.index)
                                     showToc = false
                                     showControls = false
                                 },

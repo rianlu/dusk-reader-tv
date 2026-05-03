@@ -1,6 +1,7 @@
 package com.wzl.duskreader.tv.presentation.screens.reader
 
 import android.util.Log
+import android.util.LruCache
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
@@ -9,42 +10,58 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.wzl.duskreader.tv.data.entities.Book
+import com.wzl.duskreader.tv.data.entities.BookChapter
 import com.wzl.duskreader.tv.data.reader.TxtReaderEngine
-import com.wzl.duskreader.tv.data.reader.decodeSavedPosition
-import com.wzl.duskreader.tv.data.reader.encodeSavedPosition
+import com.wzl.duskreader.tv.data.repositories.BookChapterRepository
 import com.wzl.duskreader.tv.data.repositories.BookRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
+import java.nio.charset.Charset
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * 章节级阅读 ViewModel（业内主流商业 App 的标准架构）
+ *
+ * 核心策略：
+ * - 打开书时**只扫描章节索引**（流式 IO），整本不进内存
+ * - 进入 Reader 后**只加载当前章节**（5-50KB 量级），分页只针对该章节
+ * - 翻到章节首/末按方向键 → 切换到上/下一章节
+ * - 阅读进度存 (chapterIndex, charOffsetInChapter)，不受字号变化影响
+ * - LRU 缓存最近 3 章节文本，前后翻章命中缓存秒切
+ */
 @HiltViewModel
 class ReaderViewModel @Inject constructor(
     private val repository: BookRepository,
+    private val chapterRepository: BookChapterRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
-    data class Chapter(val title: String, val offset: Int)
+    /** 暴露给 UI 的精简章节信息（不含字节偏移） */
+    data class ReaderChapter(val index: Int, val title: String)
 
-    private enum class PagingAnchor {
-        START,
-        END,
-    }
-
-    private val bookId: Long = savedStateHandle.get<String>(ReaderScreen.BookIdBundleKey)?.toLongOrNull() ?: 0L
+    private val bookId: Long =
+        savedStateHandle.get<String>(ReaderScreen.BookIdBundleKey)?.toLongOrNull() ?: 0L
 
     private var book: Book? = null
-    private var contentParagraphs: List<String> = emptyList()
-    private var fullText: String = ""
-    private var windowStartOffset: Int = 0
-    private var currentPageOffset: Int = 0
-    private var pendingPagingAnchor = PagingAnchor.START
+    private var charset: Charset = Charsets.UTF_8
+    private var engine: TxtReaderEngine? = null
+    private var bookChapters: List<BookChapter> = emptyList()
+
+    private var currentChapterIndex: Int = 0
+    private var currentChapterText: String = ""
+
+    /** 当前章节内的字符偏移（从 0 开始），是阅读进度的一半 */
+    private var currentCharOffsetInChapter: Int = 0
+
+    /** LRU 缓存近 3 章节的文本，前后翻章不重复 IO */
+    private val chapterTextCache = LruCache<Int, String>(3)
+
     private var progressSaveJob: Job? = null
 
     private val _bookTitle = MutableStateFlow("")
@@ -59,7 +76,7 @@ class ReaderViewModel @Inject constructor(
     private val _totalProgress = MutableStateFlow(0f)
     val totalProgress = _totalProgress.asStateFlow()
 
-    private val _chapters = MutableStateFlow<List<Chapter>>(emptyList())
+    private val _chapters = MutableStateFlow<List<ReaderChapter>>(emptyList())
     val chapters = _chapters.asStateFlow()
 
     private val _currentChapterTitle = MutableStateFlow("开始")
@@ -82,7 +99,7 @@ class ReaderViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             val loaded = repository.getBookById(bookId)
             if (loaded == null) {
-                _pages.value = listOf(ReaderPage(content = "书籍不存在", startOffset = 0, endOffset = 0))
+                _pages.value = listOf(ReaderPage("书籍不存在", 0, 0))
                 _isLoaded.value = true
                 return@launch
             }
@@ -91,90 +108,88 @@ class ReaderViewModel @Inject constructor(
 
             val file = File(loaded.path)
             if (!file.exists()) {
-                _pages.value = listOf(
-                    ReaderPage(content = "文件不存在：${loaded.path}", startOffset = 0, endOffset = 0),
+                _pages.value = listOf(ReaderPage("文件不存在：${loaded.path}", 0, 0))
+                _isLoaded.value = true
+                return@launch
+            }
+
+            val txtEngine = TxtReaderEngine(file)
+            engine = txtEngine
+            charset = txtEngine.detectCharset()
+            Log.d(TAG, "编码=$charset 文件=${file.length()}字节")
+
+            // 章节索引：先看数据库；没有就流式扫描
+            var chapters = chapterRepository.getByBookId(bookId)
+            if (chapters.isEmpty()) {
+                val scanStart = System.currentTimeMillis()
+                val scanResults = txtEngine.scanChapters(charset)
+                chapters = scanResults.mapIndexed { index, scan ->
+                    val nextOffset = scanResults.getOrNull(index + 1)?.byteOffset ?: file.length()
+                    BookChapter(
+                        bookId = bookId,
+                        chapterIndex = index,
+                        title = scan.title,
+                        byteOffset = scan.byteOffset,
+                        byteLength = (nextOffset - scan.byteOffset).toInt(),
+                    )
+                }
+                chapterRepository.replaceForBook(bookId, chapters)
+                Log.d(
+                    TAG,
+                    "章节扫描完成 bookId=$bookId 章节数=${chapters.size} 耗时=${System.currentTimeMillis() - scanStart}ms",
                 )
-                _isLoaded.value = true
-                return@launch
+            } else {
+                Log.d(TAG, "章节索引命中缓存 bookId=$bookId 章节数=${chapters.size}")
             }
+            bookChapters = chapters
+            _chapters.value = chapters.map { ReaderChapter(it.chapterIndex, it.title) }
 
-            val rawText = TxtReaderEngine(file).readFullContent()
-            contentParagraphs = rawText
-                .split("\n")
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-            rebuildFullText(DEFAULT_PARAGRAPH_SPACING_DP, preserveProgress = false)
-
-            if (fullText.isEmpty()) {
-                _pages.value = listOf(ReaderPage(content = "暂无可读取内容", startOffset = 0, endOffset = 0))
-                _isLoaded.value = true
-                return@launch
+            // 写回 Book.totalSize（章节级架构下复用为「总章节数」），用于书架和详情页显示进度
+            val expectedTotal = chapters.size.toLong()
+            val effectiveBook = if (loaded.totalSize != expectedTotal) {
+                val updated = loaded.copy(totalSize = expectedTotal)
+                repository.update(updated)
+                updated
+            } else {
+                loaded
             }
+            book = effectiveBook
 
-            currentPageOffset = decodeSavedPosition(
-                savedPos = loaded.lastReadPosition,
-                fullTextLength = fullText.length,
-            )
-            windowStartOffset = currentPageOffset
+            // 恢复阅读进度
+            val maxIndex = (chapters.lastIndex).coerceAtLeast(0)
+            currentChapterIndex = effectiveBook.lastReadChapter.coerceIn(0, maxIndex)
+            currentCharOffsetInChapter = effectiveBook.lastReadPosition.coerceAtLeast(0)
+
+            loadCurrentChapter()
 
             _isLoaded.value = true
             updateProgress()
             updateCurrentChapterTitle()
-            Log.d(TAG, "文本加载完成，长度=${fullText.length}, 初始偏移=$currentPageOffset")
         }
     }
 
-    private fun rebuildFullText(paragraphSpacing: Int, preserveProgress: Boolean) {
-        val previousLength = fullText.length
-        fullText = buildFormattedReaderText(contentParagraphs, paragraphSpacing)
-
-        currentPageOffset = if (preserveProgress) {
-            remapOffsetByProgress(
-                currentOffset = currentPageOffset,
-                previousLength = previousLength,
-                newLength = fullText.length,
-            )
+    private suspend fun loadCurrentChapter() {
+        val ch = bookChapters.getOrNull(currentChapterIndex) ?: return
+        val cached = chapterTextCache.get(ch.chapterIndex)
+        currentChapterText = if (cached != null) {
+            cached
         } else {
-            0
+            withContext(Dispatchers.IO) {
+                val raw = runCatching {
+                    engine?.readChapterText(ch.byteOffset, ch.byteLength, charset).orEmpty()
+                }.getOrElse {
+                    Log.e(TAG, "读取章节失败 idx=${ch.chapterIndex}", it)
+                    ""
+                }
+                val formatted = formatChapterText(raw)
+                chapterTextCache.put(ch.chapterIndex, formatted)
+                formatted
+            }
         }
-
-        scanChapters()
-    }
-
-    private fun scanChapters() {
-        val regex = Regex("^\\s*(第.{1,9}[章节回部集卷]).*", RegexOption.MULTILINE)
-        val found = regex.findAll(fullText)
-            .map { match -> Chapter(match.groupValues[0].trim().take(20), match.range.first) }
-            .toMutableList()
-        if (found.isEmpty()) {
-            found.add(Chapter("开始", 0))
+        // 越界保护
+        if (currentCharOffsetInChapter > currentChapterText.length) {
+            currentCharOffsetInChapter = 0
         }
-        _chapters.value = found
-        _currentChapterTitle.value = found.first().title
-    }
-
-    private fun updateProgress() {
-        _totalProgress.value = progressRatioForOffset(
-            currentOffset = currentPageOffset,
-            fullTextLength = fullText.length,
-        )
-        updateCurrentChapterTitle()
-    }
-
-    private fun updateCurrentChapterTitle() {
-        val chapter = _chapters.value.lastOrNull { it.offset <= currentPageOffset }
-            ?: _chapters.value.firstOrNull()
-        if (chapter != null) {
-            _currentChapterTitle.value = chapter.title
-        }
-    }
-
-    fun jumpToOffset(offset: Int) {
-        val target = offset.coerceIn(0, fullText.length)
-        currentPageOffset = target
-        windowStartOffset = target
-        updateProgress()
-        requestPaging(anchor = PagingAnchor.START)
     }
 
     fun performPaging(
@@ -182,53 +197,69 @@ class ReaderViewModel @Inject constructor(
         containerConstraints: Constraints,
         textStyle: TextStyle,
     ) {
-        if (!_isLoaded.value || fullText.isEmpty()) return
+        if (!_isLoaded.value || currentChapterText.isEmpty()) return
         if (_isPaging.value || !containerConstraints.hasBoundedWidth || !containerConstraints.hasBoundedHeight) return
 
         viewModelScope.launch(Dispatchers.Default) {
             _isPaging.value = true
             val startTime = System.currentTimeMillis()
             try {
-                delay(100)
-
-                val totalLength = fullText.length
-                val windowEndOffset = (windowStartOffset + WINDOW_LIMIT_CHARS).coerceAtMost(totalLength)
-                val windowPages = mutableListOf<ReaderPage>()
-                var pageStartOffset = windowStartOffset
-
-                while (pageStartOffset < windowEndOffset && windowPages.size < MAX_WINDOW_PAGES) {
-                    val remainingText = fullText.substring(pageStartOffset, windowEndOffset)
-                    val layoutResult: TextLayoutResult = textMeasurer.measure(
-                        text = remainingText,
+                val pageHeight = containerConstraints.maxHeight
+                val unbounded = Constraints(
+                    maxWidth = containerConstraints.maxWidth,
+                    maxHeight = (pageHeight * MAX_CHAPTER_PAGES).coerceAtLeast(pageHeight),
+                )
+                val layoutResult: TextLayoutResult = try {
+                    textMeasurer.measure(
+                        text = currentChapterText,
                         style = textStyle,
-                        constraints = containerConstraints,
+                        constraints = unbounded,
                         softWrap = true,
                     )
-                    val measuredBreakIndex = if (layoutResult.hasVisualOverflow) {
-                        layoutResult.getLineEnd(layoutResult.lineCount - 1, true)
-                    } else {
-                        remainingText.length
-                    }
-                    val safeBreakIndex = measuredBreakIndex.coerceAtLeast(1)
-                    val pageText = remainingText.substring(0, safeBreakIndex)
-                    val pageEndOffset = (pageStartOffset + pageText.length).coerceAtMost(windowEndOffset)
-                    windowPages += ReaderPage(
-                        content = pageText,
-                        startOffset = pageStartOffset,
-                        endOffset = pageEndOffset,
-                    )
-                    pageStartOffset = pageEndOffset
+                } catch (oom: OutOfMemoryError) {
+                    Log.e(TAG, "measure 内存不足，跳过本次分页", oom)
+                    return@launch
+                } catch (t: Throwable) {
+                    Log.e(TAG, "measure 异常，跳过本次分页", t)
+                    return@launch
                 }
 
-                _pages.value = windowPages
-                _pendingPageIndex.value = when (pendingPagingAnchor) {
-                    PagingAnchor.START -> 0
-                    PagingAnchor.END -> windowPages.lastIndex
-                }.takeIf { windowPages.isNotEmpty() }
+                val totalLines = layoutResult.lineCount
+                val pages = mutableListOf<ReaderPage>()
+                var lineCursor = 0
+
+                while (lineCursor < totalLines && pages.size < MAX_CHAPTER_PAGES) {
+                    val pageTop = layoutResult.getLineTop(lineCursor)
+                    val pageBottomLimit = pageTop + pageHeight
+                    var lastFitLine = lineCursor
+                    var probe = lineCursor
+                    while (probe < totalLines && layoutResult.getLineBottom(probe) <= pageBottomLimit) {
+                        lastFitLine = probe
+                        probe++
+                    }
+                    val pageStartChar = layoutResult.getLineStart(lineCursor)
+                    val pageEndChar = layoutResult.getLineEnd(lastFitLine, visibleEnd = true)
+                    pages += ReaderPage(
+                        content = currentChapterText.substring(pageStartChar, pageEndChar),
+                        startOffset = pageStartChar,
+                        endOffset = pageEndChar,
+                    )
+                    lineCursor = lastFitLine + 1
+                }
+
+                // 根据章节内字符偏移定位到对应页
+                val targetIndex = if (pages.isEmpty()) {
+                    null
+                } else {
+                    val found = pages.indexOfFirst { currentCharOffsetInChapter < it.endOffset }
+                    if (found < 0) pages.lastIndex else found
+                }
+
+                _pendingPageIndex.value = targetIndex
+                _pages.value = pages
                 Log.d(
                     TAG,
-                    "窗口分页完成 [${windowStartOffset}..${windowPages.lastOrNull()?.endOffset ?: windowStartOffset}], " +
-                        "页数=${windowPages.size}, 耗时=${System.currentTimeMillis() - startTime}ms",
+                    "章节分页 idx=$currentChapterIndex 页数=${pages.size} 耗时=${System.currentTimeMillis() - startTime}ms",
                 )
             } finally {
                 _isPaging.value = false
@@ -238,35 +269,58 @@ class ReaderViewModel @Inject constructor(
 
     fun onPageChanged(pageIndex: Int) {
         val page = _pages.value.getOrNull(pageIndex) ?: return
-        currentPageOffset = page.startOffset
+        currentCharOffsetInChapter = page.startOffset
         updateProgress()
         saveProgress()
     }
 
-    fun loadNextWindow() {
+    /** 翻到下一章节（在 ReaderScreen.moveForward 已是末页时调用） */
+    fun loadNextChapter() {
         if (_isPaging.value) return
-        val lastPage = _pages.value.lastOrNull() ?: return
-        if (lastPage.endOffset >= fullText.length) return
-        windowStartOffset = lastPage.endOffset
-        currentPageOffset = windowStartOffset
-        updateProgress()
-        requestPaging(anchor = PagingAnchor.START)
+        if (currentChapterIndex >= bookChapters.lastIndex) return
+        currentChapterIndex++
+        currentCharOffsetInChapter = 0
+        viewModelScope.launch {
+            loadCurrentChapter()
+            updateProgress()
+            updateCurrentChapterTitle()
+            requestPaging()
+        }
     }
 
-    fun loadPreviousWindow() {
-        if (_isPaging.value || windowStartOffset <= 0) return
-        windowStartOffset = (windowStartOffset - PREVIOUS_WINDOW_STEP_CHARS).coerceAtLeast(0)
-        currentPageOffset = windowStartOffset
-        updateProgress()
-        requestPaging(anchor = PagingAnchor.END)
+    /** 翻到上一章节（在 ReaderScreen.moveBackward 已是首页时调用），落点是上一章末页 */
+    fun loadPreviousChapter() {
+        if (_isPaging.value) return
+        if (currentChapterIndex <= 0) return
+        currentChapterIndex--
+        viewModelScope.launch {
+            loadCurrentChapter()
+            // 落点设到章节末，performPaging 会算出末页并触发 pendingPageIndex
+            currentCharOffsetInChapter = (currentChapterText.length - 1).coerceAtLeast(0)
+            updateProgress()
+            updateCurrentChapterTitle()
+            requestPaging()
+        }
     }
 
-    fun repaginateFromCurrentPosition(paragraphSpacing: Int) {
-        if (!_isLoaded.value || contentParagraphs.isEmpty()) return
-        rebuildFullText(paragraphSpacing, preserveProgress = true)
-        windowStartOffset = currentPageOffset
-        updateProgress()
-        requestPaging(anchor = PagingAnchor.START)
+    /** 跳转到指定章节（目录点击使用） */
+    fun jumpToChapter(chapterIndex: Int) {
+        if (_isPaging.value) return
+        val target = chapterIndex.coerceIn(0, bookChapters.lastIndex.coerceAtLeast(0))
+        currentChapterIndex = target
+        currentCharOffsetInChapter = 0
+        viewModelScope.launch {
+            loadCurrentChapter()
+            updateProgress()
+            updateCurrentChapterTitle()
+            requestPaging()
+        }
+    }
+
+    /** 字号 / 行间距变化时调用，仅重排当前章节 */
+    fun repaginate() {
+        if (!_isLoaded.value) return
+        requestPaging()
     }
 
     fun consumePendingPageIndex() {
@@ -275,9 +329,7 @@ class ReaderViewModel @Inject constructor(
 
     fun saveProgress() {
         progressSaveJob?.cancel()
-        progressSaveJob = viewModelScope.launch {
-            persistProgress()
-        }
+        progressSaveJob = viewModelScope.launch { persistProgress() }
     }
 
     fun saveProgressBeforeExit(onComplete: () -> Unit) {
@@ -296,65 +348,47 @@ class ReaderViewModel @Inject constructor(
 
     private suspend fun persistProgress() = withContext(Dispatchers.IO) {
         val bk = book ?: return@withContext
-        val ratio = encodeSavedPosition(currentPageOffset, fullText.length)
         repository.update(
             bk.copy(
-                lastReadPosition = ratio,
+                lastReadChapter = currentChapterIndex,
+                lastReadPosition = currentCharOffsetInChapter,
                 lastReadTime = System.currentTimeMillis(),
             ),
         )
-        Log.d(TAG, "进度已保存：offset=$currentPageOffset, ratio=$ratio")
     }
 
-    private fun requestPaging(anchor: PagingAnchor) {
-        pendingPagingAnchor = anchor
-        _pages.value = emptyList()
+    private fun requestPaging() {
         _pendingPageIndex.value = null
         _pagingRequestVersion.value += 1
     }
 
+    private fun updateProgress() {
+        val total = bookChapters.size.coerceAtLeast(1)
+        val chapterRatio = currentChapterIndex.toFloat() / total
+        val withinChapter = if (currentChapterText.isNotEmpty()) {
+            (currentCharOffsetInChapter.toFloat() / currentChapterText.length) / total
+        } else {
+            0f
+        }
+        _totalProgress.value = (chapterRatio + withinChapter).coerceIn(0f, 1f)
+    }
+
+    private fun updateCurrentChapterTitle() {
+        _currentChapterTitle.value = bookChapters.getOrNull(currentChapterIndex)?.title ?: "开始"
+    }
+
     companion object {
         private const val TAG = "ReaderVM"
-        private const val DEFAULT_PARAGRAPH_SPACING_DP = 16
-        private const val WINDOW_LIMIT_CHARS = 50_000
-        private const val PREVIOUS_WINDOW_STEP_CHARS = 35_000
-        private const val MAX_WINDOW_PAGES = 200
+        private const val MAX_CHAPTER_PAGES = 200
     }
 }
 
-internal fun buildFormattedReaderText(paragraphs: List<String>, paragraphSpacing: Int): String {
-    if (paragraphs.isEmpty()) return ""
-    val separator = paragraphSeparatorForSpacing(paragraphSpacing)
-    return paragraphs.joinToString(separator = separator) { "　　$it" }
-}
-
-internal fun paragraphSeparatorForSpacing(paragraphSpacing: Int): String {
-    val breakCount = when {
-        paragraphSpacing <= 16 -> 2
-        paragraphSpacing <= 24 -> 3
-        else -> 4
-    }
-    return "\n".repeat(breakCount)
-}
-
-internal fun progressRatioForOffset(currentOffset: Int, fullTextLength: Int): Float {
-    if (fullTextLength <= 0) return 0f
-    return currentOffset.toFloat()
-        .div(fullTextLength)
-        .coerceIn(0f, 1f)
-}
-
-internal fun remapOffsetByProgress(
-    currentOffset: Int,
-    previousLength: Int,
-    newLength: Int,
-): Int {
-    if (newLength <= 0) return 0
-    val progressRatio = progressRatioForOffset(
-        currentOffset = currentOffset,
-        fullTextLength = previousLength,
-    )
-    return (progressRatio * newLength)
-        .toInt()
-        .coerceIn(0, newLength)
+/** 章节文本格式化：每段首加全角空格、段间空行 */
+internal fun formatChapterText(raw: String): String {
+    if (raw.isEmpty()) return ""
+    return raw.split("\n")
+        .asSequence()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .joinToString(separator = "\n\n") { "　　$it" }
 }

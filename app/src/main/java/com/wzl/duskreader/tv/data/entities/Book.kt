@@ -27,9 +27,3 @@ data class Book(
     val lastReadTime: Long = System.currentTimeMillis(),
     val totalSize: Long = 0
 )
-
-fun Book.preferredBackdropPath(): String? = when {
-    !backdropPath.isNullOrBlank() -> backdropPath
-    !coverPath.isNullOrBlank() -> coverPath
-    else -> null
-}
