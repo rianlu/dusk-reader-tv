@@ -56,12 +56,14 @@ import kotlinx.coroutines.launch
 fun ReaderSettingsOverlay(
     currentFontSize: Int,
     currentTheme: ReaderTheme,
+    currentTextBrightness: ReaderTextBrightness,
     currentLineSpacing: Float,
     currentPageTurnMode: PageTurnMode,
     currentAutoTurnSeconds: Int,
     firstItemRequester: FocusRequester,
     onFontSizeChange: (Int) -> Unit,
     onThemeChange: (ReaderTheme) -> Unit,
+    onTextBrightnessChange: (ReaderTextBrightness) -> Unit,
     onLineSpacingChange: (Float) -> Unit,
     onPageTurnModeChange: (PageTurnMode) -> Unit,
     onAutoTurnSecondsChange: (Int) -> Unit,
@@ -70,6 +72,7 @@ fun ReaderSettingsOverlay(
     val pageTurnFirstRequester = remember { FocusRequester() }
     val autoTurnDecRequester = remember { FocusRequester() }
     val themeFirstRequester = remember { FocusRequester() }
+    val brightnessFirstRequester = remember { FocusRequester() }
 
     val isAuto = currentPageTurnMode == PageTurnMode.AUTO
     val pageTurnDownTarget = if (isAuto) autoTurnDecRequester else themeFirstRequester
@@ -198,7 +201,7 @@ fun ReaderSettingsOverlay(
                 Spacer(modifier = Modifier.height(28.dp))
 
                 Text(
-                    text = "背景主题",
+                    text = "阅读主题",
                     color = Color.White.copy(alpha = 0.72f),
                     style = MaterialTheme.typography.titleMedium,
                 )
@@ -221,8 +224,43 @@ fun ReaderSettingsOverlay(
                                     if (index == 0) Modifier.focusRequester(themeFirstRequester)
                                     else Modifier,
                                 )
-                                .focusProperties { up = themeUpTarget },
+                                .focusProperties {
+                                    up = themeUpTarget
+                                    down = brightnessFirstRequester
+                                },
                             onClick = { onThemeChange(theme) },
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                Text(
+                    text = "文字亮度",
+                    color = Color.White.copy(alpha = 0.72f),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier
+                        .focusGroup()
+                        .focusProperties { down = FocusRequester.Cancel },
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    ReaderTextBrightness.values().forEachIndexed { index, brightness ->
+                        OptionCard(
+                            label = brightness.displayName,
+                            selected = currentTextBrightness == brightness,
+                            modifier = Modifier
+                                .weight(1f)
+                                .then(
+                                    if (index == 0) Modifier.focusRequester(brightnessFirstRequester)
+                                    else Modifier,
+                                )
+                                .focusProperties { up = themeFirstRequester },
+                            onClick = { onTextBrightnessChange(brightness) },
                         )
                     }
                 }
@@ -412,7 +450,7 @@ private fun ThemeOption(
                     modifier = Modifier.size(width = 60.dp, height = 64.dp),
                     shape = MaterialTheme.shapes.medium,
                     colors = SurfaceDefaults.colors(containerColor = theme.bgColor),
-                    border = if (theme == ReaderTheme.NightBlack) {
+                    border = if (theme == ReaderTheme.HighContrast) {
                         Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)))
                     } else {
                         Border.None
@@ -424,7 +462,7 @@ private fun ThemeOption(
                     ) {
                         Text(
                             text = "Aa",
-                            color = theme.textColor,
+                            color = theme.adjustedTextColor(ReaderTextBrightness.Standard),
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         )
                     }

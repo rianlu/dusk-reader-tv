@@ -373,6 +373,10 @@ class ReaderViewModel @Inject constructor(
         updateReaderSettings { it.copy(theme = theme) }
     }
 
+    fun updateTextBrightness(brightness: ReaderTextBrightness) {
+        updateReaderSettings { it.copy(textBrightness = brightness) }
+    }
+
     fun updateLineSpacing(lineSpacing: Float) {
         updateReaderSettings { it.copy(lineSpacing = lineSpacing.coerceIn(1.3f, 2.4f)) }
     }

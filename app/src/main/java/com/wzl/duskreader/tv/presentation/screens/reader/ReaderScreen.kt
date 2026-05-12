@@ -116,6 +116,7 @@ fun ReaderScreen(
 
     val fontSize = readerSettings.fontSize
     val currentTheme = readerSettings.theme
+    val textBrightness = readerSettings.textBrightness
     val lineSpacing = readerSettings.lineSpacing
     val pageTurnMode = readerSettings.pageTurnMode
     val autoTurnSeconds = readerSettings.autoTurnSeconds
@@ -137,7 +138,7 @@ fun ReaderScreen(
         label = "readerBg",
     )
     val animatedTextColor by animateColorAsState(
-        targetValue = currentTheme.textColor,
+        targetValue = currentTheme.adjustedTextColor(textBrightness),
         animationSpec = tween(durationMillis = 320),
         label = "readerText",
     )
@@ -150,7 +151,7 @@ fun ReaderScreen(
         textAlign = TextAlign.Justify,
         fontFamily = FontFamily.Serif,
         shadow = Shadow(
-            color = Color.Black.copy(alpha = if (currentTheme == ReaderTheme.NightBlack) 0.28f else 0.08f),
+            color = Color.Black.copy(alpha = if (currentTheme == ReaderTheme.HighContrast) 0.28f else 0.08f),
             offset = Offset(0f, 2f),
             blurRadius = 4f,
         ),
@@ -538,12 +539,14 @@ fun ReaderScreen(
             ReaderSettingsOverlay(
                 currentFontSize = fontSize,
                 currentTheme = currentTheme,
+                currentTextBrightness = textBrightness,
                 currentLineSpacing = lineSpacing,
                 currentPageTurnMode = pageTurnMode,
                 currentAutoTurnSeconds = autoTurnSeconds,
                 firstItemRequester = settingsFirstRowRequester,
                 onFontSizeChange = viewModel::updateFontSize,
                 onThemeChange = viewModel::updateTheme,
+                onTextBrightnessChange = viewModel::updateTextBrightness,
                 onLineSpacingChange = viewModel::updateLineSpacing,
                 onPageTurnModeChange = viewModel::updatePageTurnMode,
                 onAutoTurnSecondsChange = viewModel::updateAutoTurnSeconds,

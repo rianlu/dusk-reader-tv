@@ -6,6 +6,18 @@ import org.junit.Test
 class PageTurnModeTest {
 
     @Test
+    fun readerTheme_usesTvFriendlyOrderAndLabels() {
+        val labels = ReaderTheme.values().map { it.displayName }
+        assertEquals(listOf("墨绿夜读", "影院暗灰", "暖纸柔光", "高对比"), labels)
+    }
+
+    @Test
+    fun readerTextBrightness_hasThreeSimpleLevels() {
+        val labels = ReaderTextBrightness.values().map { it.displayName }
+        assertEquals(listOf("柔和", "标准", "清晰"), labels)
+    }
+
+    @Test
     fun pageTurnMode_hasThreeOptionsWithChineseLabels() {
         val labels = PageTurnMode.values().map { it.displayName }
         assertEquals(listOf("左右键", "上下键", "自动翻页"), labels)
