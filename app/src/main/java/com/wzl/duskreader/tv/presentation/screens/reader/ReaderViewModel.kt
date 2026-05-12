@@ -11,6 +11,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.wzl.duskreader.tv.data.entities.Book
 import com.wzl.duskreader.tv.data.entities.BookChapter
+import com.wzl.duskreader.tv.data.reader.ChapterScanResult
+import com.wzl.duskreader.tv.data.reader.EpubReaderEngine
 import com.wzl.duskreader.tv.data.reader.TxtReaderEngine
 import com.wzl.duskreader.tv.data.repositories.BookChapterRepository
 import com.wzl.duskreader.tv.data.repositories.BookRepository
@@ -22,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -39,6 +42,7 @@ import kotlinx.coroutines.withContext
 class ReaderViewModel @Inject constructor(
     private val repository: BookRepository,
     private val chapterRepository: BookChapterRepository,
+    private val readerSettingsStore: ReaderSettingsStore,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -50,7 +54,8 @@ class ReaderViewModel @Inject constructor(
 
     private var book: Book? = null
     private var charset: Charset = Charsets.UTF_8
-    private var engine: TxtReaderEngine? = null
+    private var txtEngine: TxtReaderEngine? = null
+    private var epubEngine: EpubReaderEngine? = null
     private var bookChapters: List<BookChapter> = emptyList()
 
     private var currentChapterIndex: Int = 0
@@ -63,6 +68,9 @@ class ReaderViewModel @Inject constructor(
     private val chapterTextCache = LruCache<Int, String>(3)
 
     private var progressSaveJob: Job? = null
+
+    private val _readerSettings = MutableStateFlow(readerSettingsStore.read())
+    val readerSettings = _readerSettings.asStateFlow()
 
     private val _bookTitle = MutableStateFlow("")
     val bookTitle = _bookTitle.asStateFlow()
@@ -113,16 +121,24 @@ class ReaderViewModel @Inject constructor(
                 return@launch
             }
 
-            val txtEngine = TxtReaderEngine(file)
-            engine = txtEngine
-            charset = txtEngine.detectCharset()
-            Log.d(TAG, "编码=$charset 文件=${file.length()}字节")
+            val format = loaded.format.ifBlank { file.extension }.uppercase()
+            if (format == FORMAT_EPUB || file.extension.equals("epub", ignoreCase = true)) {
+                epubEngine = EpubReaderEngine(file)
+                txtEngine = null
+                Log.d(TAG, "EPUB 文件=${file.length()}字节")
+            } else {
+                val engine = TxtReaderEngine(file)
+                txtEngine = engine
+                epubEngine = null
+                charset = engine.detectCharset()
+                Log.d(TAG, "TXT 编码=$charset 文件=${file.length()}字节")
+            }
 
             // 章节索引：先看数据库；没有就流式扫描
             var chapters = chapterRepository.getByBookId(bookId)
-            if (chapters.isEmpty()) {
+            if (epubEngine != null || chapters.isEmpty()) {
                 val scanStart = System.currentTimeMillis()
-                val scanResults = txtEngine.scanChapters(charset)
+                val scanResults = scanChapters()
                 chapters = scanResults.mapIndexed { index, scan ->
                     val nextOffset = scanResults.getOrNull(index + 1)?.byteOffset ?: file.length()
                     BookChapter(
@@ -130,7 +146,7 @@ class ReaderViewModel @Inject constructor(
                         chapterIndex = index,
                         title = scan.title,
                         byteOffset = scan.byteOffset,
-                        byteLength = (nextOffset - scan.byteOffset).toInt(),
+                        byteLength = if (epubEngine != null) 0 else (nextOffset - scan.byteOffset).toInt(),
                     )
                 }
                 chapterRepository.replaceForBook(bookId, chapters)
@@ -176,7 +192,7 @@ class ReaderViewModel @Inject constructor(
         } else {
             withContext(Dispatchers.IO) {
                 val raw = runCatching {
-                    engine?.readChapterText(ch.byteOffset, ch.byteLength, charset).orEmpty()
+                    readChapterText(ch)
                 }.getOrElse {
                     Log.e(TAG, "读取章节失败 idx=${ch.chapterIndex}", it)
                     ""
@@ -327,6 +343,33 @@ class ReaderViewModel @Inject constructor(
         _pendingPageIndex.value = null
     }
 
+    fun updateFontSize(fontSize: Int) {
+        updateReaderSettings { it.copy(fontSize = fontSize.coerceIn(18, 80)) }
+    }
+
+    fun updateTheme(theme: ReaderTheme) {
+        updateReaderSettings { it.copy(theme = theme) }
+    }
+
+    fun updateLineSpacing(lineSpacing: Float) {
+        updateReaderSettings { it.copy(lineSpacing = lineSpacing.coerceIn(1.3f, 2.4f)) }
+    }
+
+    fun updatePageTurnMode(mode: PageTurnMode) {
+        updateReaderSettings { it.copy(pageTurnMode = mode) }
+    }
+
+    fun updateAutoTurnSeconds(seconds: Int) {
+        updateReaderSettings {
+            it.copy(
+                autoTurnSeconds = seconds.coerceIn(
+                    AutoTurnInterval.MIN_SECONDS,
+                    AutoTurnInterval.MAX_SECONDS,
+                ),
+            )
+        }
+    }
+
     fun saveProgress() {
         progressSaveJob?.cancel()
         progressSaveJob = viewModelScope.launch { persistProgress() }
@@ -362,6 +405,22 @@ class ReaderViewModel @Inject constructor(
         _pagingRequestVersion.value += 1
     }
 
+    private fun scanChapters() = epubEngine?.scanChapters()
+        ?: txtEngine?.scanChapters(charset)
+        ?: listOf(ChapterScanResult("正文", 0L))
+
+    private fun readChapterText(chapter: BookChapter): String {
+        return epubEngine?.readChapterText(chapter.byteOffset.toInt())
+            ?: txtEngine?.readChapterText(chapter.byteOffset, chapter.byteLength, charset)
+            ?: ""
+    }
+
+    private fun updateReaderSettings(transform: (ReaderSettings) -> ReaderSettings) {
+        _readerSettings.update { current ->
+            transform(current).also(readerSettingsStore::save)
+        }
+    }
+
     private fun updateProgress() {
         val total = bookChapters.size.coerceAtLeast(1)
         val chapterRatio = currentChapterIndex.toFloat() / total
@@ -380,6 +439,7 @@ class ReaderViewModel @Inject constructor(
     companion object {
         private const val TAG = "ReaderVM"
         private const val MAX_CHAPTER_PAGES = 200
+        private const val FORMAT_EPUB = "EPUB"
     }
 }
 

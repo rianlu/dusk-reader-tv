@@ -51,13 +51,23 @@ fun ReaderSettingsOverlay(
     currentFontSize: Int,
     currentTheme: ReaderTheme,
     currentLineSpacing: Float,
+    currentPageTurnMode: PageTurnMode,
+    currentAutoTurnSeconds: Int,
     firstItemRequester: FocusRequester,
     onFontSizeChange: (Int) -> Unit,
     onThemeChange: (ReaderTheme) -> Unit,
     onLineSpacingChange: (Float) -> Unit,
+    onPageTurnModeChange: (PageTurnMode) -> Unit,
+    onAutoTurnSecondsChange: (Int) -> Unit,
 ) {
     val lineSpacingDecRequester = remember { FocusRequester() }
+    val pageTurnFirstRequester = remember { FocusRequester() }
+    val autoTurnDecRequester = remember { FocusRequester() }
     val themeFirstRequester = remember { FocusRequester() }
+
+    val isAuto = currentPageTurnMode == PageTurnMode.AUTO
+    val pageTurnDownTarget = if (isAuto) autoTurnDecRequester else themeFirstRequester
+    val themeUpTarget = if (isAuto) autoTurnDecRequester else pageTurnFirstRequester
 
     Box(
         modifier = Modifier
@@ -123,9 +133,61 @@ fun ReaderSettingsOverlay(
                     },
                     decrementRequester = lineSpacingDecRequester,
                     modifier = Modifier.focusProperties {
-                        down = themeFirstRequester
+                        down = pageTurnFirstRequester
                     },
                 )
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                Text(
+                    text = "翻页方式",
+                    color = Color.White.copy(alpha = 0.72f),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.focusGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    PageTurnMode.values().forEachIndexed { index, mode ->
+                        OptionCard(
+                            label = mode.displayName,
+                            selected = currentPageTurnMode == mode,
+                            modifier = Modifier
+                                .weight(1f)
+                                .then(
+                                    if (index == 0) Modifier.focusRequester(pageTurnFirstRequester)
+                                    else Modifier,
+                                )
+                                .focusProperties {
+                                    down = pageTurnDownTarget
+                                },
+                            onClick = { onPageTurnModeChange(mode) },
+                        )
+                    }
+                }
+
+                if (isAuto) {
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    StepperField(
+                        label = "自动翻页",
+                        value = "${currentAutoTurnSeconds}秒",
+                        onDecrement = {
+                            onAutoTurnSecondsChange(AutoTurnInterval.decrement(currentAutoTurnSeconds))
+                        },
+                        onIncrement = {
+                            onAutoTurnSecondsChange(AutoTurnInterval.increment(currentAutoTurnSeconds))
+                        },
+                        decrementRequester = autoTurnDecRequester,
+                        modifier = Modifier.focusProperties {
+                            up = pageTurnFirstRequester
+                            down = themeFirstRequester
+                        },
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(28.dp))
 
@@ -151,8 +213,9 @@ fun ReaderSettingsOverlay(
                                 .weight(1f)
                                 .then(
                                     if (index == 0) Modifier.focusRequester(themeFirstRequester)
-                                    else Modifier
-                                ),
+                                    else Modifier,
+                                )
+                                .focusProperties { up = themeUpTarget },
                             onClick = { onThemeChange(theme) },
                         )
                     }
@@ -241,6 +304,46 @@ private fun StepperButton(
                 contentDescription = contentDescription,
                 modifier = Modifier.size(20.dp),
             )
+        }
+    }
+}
+
+@Composable
+private fun OptionCard(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Surface(
+            onClick = onClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp),
+            shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.large),
+            colors = ClickableSurfaceDefaults.colors(
+                containerColor = Color(0xFF222222),
+                focusedContainerColor = Color(0xFF303030),
+            ),
+            border = ClickableSurfaceDefaults.border(
+                border = if (selected) Border(BorderStroke(2.dp, Color.White)) else Border.None,
+                focusedBorder = Border(BorderStroke(2.dp, Color.White)),
+            ),
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = label,
+                    color = if (selected) Color.White else Color.White.copy(alpha = 0.78f),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                )
+            }
         }
     }
 }

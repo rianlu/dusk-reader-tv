@@ -23,7 +23,7 @@ class BookshelfScreenViewModel @Inject constructor(
     val rescanState: StateFlow<RescanState> = _rescanState.asStateFlow()
 
     val uiState: StateFlow<BookshelfUiState> = combine(
-        bookRepository.getRecentBooks(limit = 3),
+        bookRepository.getRecentBooks(limit = 8),
         bookRepository.getAllBooks(),
     ) { recent, all ->
         BookshelfUiState.Ready(

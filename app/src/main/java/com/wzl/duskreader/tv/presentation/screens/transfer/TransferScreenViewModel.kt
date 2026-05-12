@@ -11,26 +11,44 @@ import com.wzl.duskreader.tv.network.FileTransferServer
 import com.wzl.duskreader.tv.network.TransferServerSnapshot
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 @HiltViewModel
 class TransferScreenViewModel @Inject constructor(
     private val fileTransferServer: FileTransferServer,
 ) : ViewModel() {
 
-    val uiState: StateFlow<TransferScreenUiState> = fileTransferServer.snapshot
-        .map(::snapshotToUiState)
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = snapshotToUiState(fileTransferServer.refresh()),
-        )
+    private val hasUserStarted = MutableStateFlow(false)
+
+    val uiState: StateFlow<TransferScreenUiState> = combine(
+        hasUserStarted,
+        fileTransferServer.snapshot,
+    ) { started, snapshot ->
+        if (started) snapshotToUiState(snapshot) else TransferScreenUiState.Idle
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = TransferScreenUiState.Idle,
+    )
+
+    fun startTransfer() {
+        hasUserStarted.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            fileTransferServer.start()
+        }
+    }
 
     fun refresh() {
-        fileTransferServer.refresh()
+        hasUserStarted.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            fileTransferServer.refresh()
+        }
     }
 }
 
@@ -43,6 +61,8 @@ private fun snapshotToUiState(snapshot: TransferServerSnapshot): TransferScreenU
             lastUploadMessage = snapshot.lastUploadMessage,
             lastUploadAtMillis = snapshot.lastUploadAtMillis,
         )
+    } else if (!snapshot.isAvailable && snapshot.message.contains("正在检查当前网络状态")) {
+        TransferScreenUiState.Loading
     } else {
         TransferScreenUiState.Unavailable(
             message = snapshot.message,
@@ -69,6 +89,10 @@ private fun generateQrCode(content: String, sizePx: Int): Bitmap {
 }
 
 sealed interface TransferScreenUiState {
+    data object Idle : TransferScreenUiState
+
+    data object Loading : TransferScreenUiState
+
     data class Unavailable(
         val message: String,
         val lastUploadMessage: String? = null,

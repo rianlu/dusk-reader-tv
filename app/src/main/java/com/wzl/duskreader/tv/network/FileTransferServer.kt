@@ -14,8 +14,8 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.html.respondHtml
-import io.ktor.server.netty.Netty
-import io.ktor.server.netty.NettyApplicationEngine
+import io.ktor.server.cio.CIO
+import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
@@ -71,7 +71,7 @@ class FileTransferServer @Inject constructor(
         private const val BOOK_DIR_NAME = "暮阅"
     }
 
-    private var server: NettyApplicationEngine? = null
+    private var server: ApplicationEngine? = null
     private var isRunning = false
     @Volatile
     private var lastStartError: String? = null
@@ -89,7 +89,12 @@ class FileTransferServer @Inject constructor(
     )
     val snapshot: StateFlow<TransferServerSnapshot> = _snapshot.asStateFlow()
 
-    fun start(port: Int = DEFAULT_PORT): TransferServerSnapshot = refresh(port)
+    fun start(port: Int = DEFAULT_PORT): TransferServerSnapshot {
+        if (!isRunning) {
+            refresh(port)
+        }
+        return snapshot.value
+    }
 
     @Synchronized
     fun refresh(port: Int = DEFAULT_PORT): TransferServerSnapshot {
@@ -159,7 +164,7 @@ class FileTransferServer @Inject constructor(
         lastStartError = null
         try {
             val repo = repository
-            server = embeddedServer(Netty, port = port) {
+            server = embeddedServer(CIO, port = port) {
                 routing {
                     get("/") { call.respondHtml { renderUploadPage() } }
                     post("/upload") {

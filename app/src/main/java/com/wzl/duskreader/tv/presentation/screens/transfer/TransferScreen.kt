@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -103,6 +104,12 @@ fun TransferScreen(
 
             item {
                 when (val current = state) {
+                    is TransferScreenUiState.Idle -> TransferIdleLayout(
+                        onStart = viewModel::startTransfer,
+                    )
+
+                    is TransferScreenUiState.Loading -> TransferLoadingLayout()
+
                     is TransferScreenUiState.Ready -> ReadyTransferLayout(
                         url = current.url,
                         helperMessage = current.helperMessage,
@@ -129,6 +136,76 @@ fun TransferScreen(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun TransferIdleLayout(onStart: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = SurfaceDefaults.colors(
+            containerColor = Color.White.copy(alpha = 0.07f),
+        ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 28.dp, vertical = 28.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = "传书服务未开启",
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = Color.White,
+                )
+                Text(
+                    text = "需要从手机或电脑上传书籍时再手动开启, 页面切换不会启动网络服务。",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White.copy(alpha = 0.72f),
+                )
+            }
+            Button(
+                onClick = onStart,
+                shape = ButtonDefaults.shape(MaterialTheme.shapes.large),
+            ) {
+                Text("开启无线传书")
+            }
+        }
+    }
+}
+
+@Composable
+private fun TransferLoadingLayout() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = SurfaceDefaults.colors(
+            containerColor = Color.White.copy(alpha = 0.07f),
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 28.dp, vertical = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(
+                text = "正在启动传书服务",
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = Color.White,
+            )
+            Text(
+                text = "先切换到页面, 服务会在后台完成初始化, 不会阻塞顶部导航切换。",
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.White.copy(alpha = 0.72f),
+            )
         }
     }
 }
@@ -166,17 +243,23 @@ private fun ReadyTransferLayout(
     onRefresh: () -> Unit,
 ) {
     Row(
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(28.dp),
         verticalAlignment = Alignment.Top,
     ) {
         QrHeroCard(
+            modifier = Modifier
+                .weight(1f)
+                .widthIn(min = 520.dp),
             url = url,
             qrCode = qrCode,
             onCopyAddress = onCopyAddress,
         )
 
         Column(
-            modifier = Modifier.width(420.dp),
+            modifier = Modifier
+                .weight(0.72f)
+                .widthIn(min = 360.dp, max = 460.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             TransferStatusCard(
@@ -242,12 +325,13 @@ private fun ReadyTransferLayout(
 
 @Composable
 private fun QrHeroCard(
+    modifier: Modifier = Modifier,
     url: String,
     qrCode: Bitmap,
     onCopyAddress: () -> Unit,
 ) {
     Surface(
-        modifier = Modifier.width(560.dp),
+        modifier = modifier,
         shape = MaterialTheme.shapes.extraLarge,
         colors = SurfaceDefaults.colors(
             containerColor = Color.White.copy(alpha = 0.08f),
@@ -315,11 +399,14 @@ private fun UnavailableTransferLayout(
     onRefresh: () -> Unit,
 ) {
     Row(
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(28.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Surface(
-            modifier = Modifier.width(560.dp),
+            modifier = Modifier
+                .weight(1f)
+                .widthIn(min = 520.dp),
             shape = MaterialTheme.shapes.extraLarge,
             colors = SurfaceDefaults.colors(
                 containerColor = Color.White.copy(alpha = 0.07f),
@@ -351,7 +438,9 @@ private fun UnavailableTransferLayout(
         }
 
         Column(
-            modifier = Modifier.width(420.dp),
+            modifier = Modifier
+                .weight(0.72f)
+                .widthIn(min = 360.dp, max = 460.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             TransferStatusCard(

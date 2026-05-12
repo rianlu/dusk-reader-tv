@@ -42,9 +42,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -104,15 +103,19 @@ fun ReaderScreen(
     val pagingRequestVersion by viewModel.pagingRequestVersion.collectAsStateWithLifecycle()
     val pendingPageIndex by viewModel.pendingPageIndex.collectAsStateWithLifecycle()
     val bookTitle by viewModel.bookTitle.collectAsStateWithLifecycle()
+    val readerSettings by viewModel.readerSettings.collectAsStateWithLifecycle()
 
     var showControls by remember { mutableStateOf(false) }
     var showToc by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var isExiting by remember { mutableStateOf(false) }
+    var consumedMenuKeyDownAt by remember { mutableLongStateOf(0L) }
 
-    var fontSize by remember { mutableIntStateOf(28) }
-    var currentTheme by remember { mutableStateOf(ReaderTheme.NightBlack) }
-    var lineSpacing by remember { mutableFloatStateOf(1.7f) }
+    val fontSize = readerSettings.fontSize
+    val currentTheme = readerSettings.theme
+    val lineSpacing = readerSettings.lineSpacing
+    val pageTurnMode = readerSettings.pageTurnMode
+    val autoTurnSeconds = readerSettings.autoTurnSeconds
     var readerViewportSize by remember { mutableStateOf(IntSize.Zero) }
 
     val readerPanelRequester = remember { FocusRequester() }
@@ -221,6 +224,16 @@ fun ReaderScreen(
         }
     }
 
+    // 自动翻页：进入 immersive + AUTO 模式后启动；任何菜单弹出 / 模式切换 / 章节切换 → 协程取消（暂停）
+    LaunchedEffect(pageTurnMode, autoTurnSeconds, immersive, isLoaded, pages.size) {
+        if (pageTurnMode != PageTurnMode.AUTO) return@LaunchedEffect
+        if (!immersive || !isLoaded || pages.isEmpty()) return@LaunchedEffect
+        while (true) {
+            delay(autoTurnSeconds * 1000L)
+            moveForward()
+        }
+    }
+
     var nowText by remember { mutableStateOf(LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -240,46 +253,79 @@ fun ReaderScreen(
             .fillMaxSize()
             .background(animatedBgColor)
             .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (event.nativeKeyEvent.keyCode) {
                     KeyEvent.KEYCODE_DPAD_CENTER,
-                    KeyEvent.KEYCODE_ENTER -> {
-                        if (immersive) {
-                            showControls = true
-                            true
-                        } else {
-                            false
-                        }
-                    }
-
-                    KeyEvent.KEYCODE_BACK -> {
-                        when {
-                            showToc -> showToc = false
-                            showSettings -> {
-                                showSettings = false
+                    KeyEvent.KEYCODE_ENTER -> when (event.type) {
+                        KeyEventType.KeyDown -> when {
+                            event.nativeKeyEvent.downTime == consumedMenuKeyDownAt -> true
+                            immersive -> {
+                                consumedMenuKeyDownAt = event.nativeKeyEvent.downTime
                                 showControls = true
+                                true
                             }
-                            showControls -> showControls = false
-                            else -> exitReader()
+                            else -> false
                         }
-                        true
+
+                        KeyEventType.KeyUp -> {
+                            val shouldConsume = event.nativeKeyEvent.downTime == consumedMenuKeyDownAt
+                            if (shouldConsume) consumedMenuKeyDownAt = 0L
+                            shouldConsume
+                        }
+
+                        else -> false
                     }
 
-                    KeyEvent.KEYCODE_DPAD_LEFT -> if (immersive) {
-                        moveBackward()
-                        true
-                    } else {
-                        false
-                    }
+                    else -> {
+                        if (event.type != KeyEventType.KeyDown) {
+                            false
+                        } else {
+                            when (event.nativeKeyEvent.keyCode) {
+                                KeyEvent.KEYCODE_BACK -> {
+                                    when {
+                                        showToc -> showToc = false
+                                        showSettings -> {
+                                            showSettings = false
+                                            showControls = true
+                                        }
 
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> if (immersive) {
-                        moveForward()
-                        true
-                    } else {
-                        false
-                    }
+                                        showControls -> showControls = false
+                                        else -> exitReader()
+                                    }
+                                    true
+                                }
 
-                    else -> false
+                                KeyEvent.KEYCODE_DPAD_LEFT -> if (immersive && pageTurnMode == PageTurnMode.HORIZONTAL) {
+                                    moveBackward()
+                                    true
+                                } else {
+                                    false
+                                }
+
+                                KeyEvent.KEYCODE_DPAD_RIGHT -> if (immersive && pageTurnMode == PageTurnMode.HORIZONTAL) {
+                                    moveForward()
+                                    true
+                                } else {
+                                    false
+                                }
+
+                                KeyEvent.KEYCODE_DPAD_UP -> if (immersive && pageTurnMode == PageTurnMode.VERTICAL) {
+                                    moveBackward()
+                                    true
+                                } else {
+                                    false
+                                }
+
+                                KeyEvent.KEYCODE_DPAD_DOWN -> if (immersive && pageTurnMode == PageTurnMode.VERTICAL) {
+                                    moveForward()
+                                    true
+                                } else {
+                                    false
+                                }
+
+                                else -> false
+                            }
+                        }
+                    }
                 }
             }
             .focusRequester(readerPanelRequester)
@@ -414,7 +460,11 @@ fun ReaderScreen(
                         color = Color.White.copy(alpha = 0.92f),
                     )
                     Text(
-                        text = "左右键翻页，确定键呼出菜单",
+                        text = when (pageTurnMode) {
+                            PageTurnMode.HORIZONTAL -> "左右键翻页，确定键呼出菜单"
+                            PageTurnMode.VERTICAL -> "上下键翻页，确定键呼出菜单"
+                            PageTurnMode.AUTO -> "自动翻页中，确定键呼出菜单可暂停"
+                        },
                         style = MaterialTheme.typography.labelMedium,
                         color = Color.White.copy(alpha = 0.56f),
                     )
@@ -482,10 +532,14 @@ fun ReaderScreen(
                 currentFontSize = fontSize,
                 currentTheme = currentTheme,
                 currentLineSpacing = lineSpacing,
+                currentPageTurnMode = pageTurnMode,
+                currentAutoTurnSeconds = autoTurnSeconds,
                 firstItemRequester = settingsFirstRowRequester,
-                onFontSizeChange = { fontSize = it },
-                onThemeChange = { currentTheme = it },
-                onLineSpacingChange = { lineSpacing = it },
+                onFontSizeChange = viewModel::updateFontSize,
+                onThemeChange = viewModel::updateTheme,
+                onLineSpacingChange = viewModel::updateLineSpacing,
+                onPageTurnModeChange = viewModel::updatePageTurnMode,
+                onAutoTurnSecondsChange = viewModel::updateAutoTurnSeconds,
             )
         }
 

@@ -59,6 +59,7 @@ fun DashboardTopBar(
     onScreenSelection: (screen: Screens) -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
+    val sectionLabel = screens.getOrNull(selectedTabIndex)?.sectionLabel() ?: "本地书库"
     Box(modifier = modifier) {
         Surface(
             modifier = Modifier
@@ -123,7 +124,7 @@ fun DashboardTopBar(
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
-                    text = "本地书库",
+                    text = sectionLabel,
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.52f),
                 )
@@ -181,4 +182,12 @@ private fun DuskReaderLogo(
             fontFamily = LexendExa,
         )
     }
+}
+
+private fun Screens.sectionLabel(): String = when (this) {
+    Screens.Home -> "继续阅读"
+    Screens.Bookshelf -> "全部书库"
+    Screens.Transfer -> "无线传书"
+    Screens.Settings -> "应用设置"
+    else -> "本地书库"
 }

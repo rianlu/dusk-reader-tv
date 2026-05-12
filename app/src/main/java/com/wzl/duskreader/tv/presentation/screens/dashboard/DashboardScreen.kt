@@ -17,6 +17,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -42,6 +43,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.wzl.duskreader.tv.presentation.screens.Screens
 import com.wzl.duskreader.tv.presentation.screens.bookshelf.BookshelfScreen
+import com.wzl.duskreader.tv.presentation.screens.bookshelf.BookshelfScreenMode
+import com.wzl.duskreader.tv.presentation.screens.settings.SettingsScreen
 import com.wzl.duskreader.tv.presentation.screens.transfer.TransferScreen
 import com.wzl.duskreader.tv.presentation.utils.Padding
 
@@ -72,11 +75,14 @@ fun DashboardScreen(
 
     var isTopBarVisible by remember { mutableStateOf(true) }
     var isTopBarFocused by remember { mutableStateOf(false) }
+    var contentFocusRequestVersion by remember { mutableLongStateOf(0L) }
 
     var currentDestination: String? by remember { mutableStateOf(null) }
     val currentTopBarSelectedTabIndex by remember(currentDestination) {
         derivedStateOf {
-            currentDestination?.let { TopBarTabs.indexOf(Screens.valueOf(it)) } ?: 0
+            currentDestination?.let { destination ->
+                TopBarTabs.indexOfFirst { it.name == destination }.takeIf { it >= 0 } ?: 0
+            } ?: 0
         }
     }
 
@@ -150,10 +156,7 @@ fun DashboardScreen(
         ) { screen ->
             val targetRoute = screen()
             if (currentDestination != targetRoute) {
-                navController.navigate(targetRoute) {
-                    if (screen == TopBarTabs[0]) popUpTo(TopBarTabs[0].invoke())
-                    launchSingleTop = true
-                }
+                navController.navigateTopLevel(screen)
             }
         }
 
@@ -163,7 +166,21 @@ fun DashboardScreen(
             isTopBarVisible = isTopBarVisible,
             navController = navController,
             modifier = Modifier.offset(y = navHostTopPaddingDp),
+            contentFocusRequestVersion = contentFocusRequestVersion,
+            onRequestContentFocus = { contentFocusRequestVersion++ },
         )
+    }
+}
+
+private fun NavHostController.navigateTopLevel(screen: Screens) {
+    val targetRoute = screen()
+    if (currentDestination?.route == targetRoute) return
+    navigate(targetRoute) {
+        popUpTo(Screens.Home()) {
+            saveState = true
+        }
+        launchSingleTop = true
+        restoreState = true
     }
 }
 
@@ -194,21 +211,43 @@ private fun Body(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
     isTopBarVisible: Boolean = true,
+    contentFocusRequestVersion: Long = 0L,
+    onRequestContentFocus: () -> Unit = {},
 ) =
     NavHost(
         modifier = modifier,
         navController = navController,
-        startDestination = Screens.Bookshelf(),
+        startDestination = Screens.Home(),
     ) {
+        composable(Screens.Home()) {
+            BookshelfScreen(
+                onBookClick = { book -> openBookDetailsScreen(book.id) },
+                onGoTransfer = { navController.navigateTopLevel(Screens.Transfer) },
+                onGoBookshelf = {
+                    onRequestContentFocus()
+                    navController.navigateTopLevel(Screens.Bookshelf)
+                },
+                onScroll = updateTopBarVisibility,
+                isTopBarVisible = isTopBarVisible,
+                mode = BookshelfScreenMode.Home,
+                requestInitialFocus = false,
+            )
+        }
         composable(Screens.Bookshelf()) {
             BookshelfScreen(
                 onBookClick = { book -> openBookDetailsScreen(book.id) },
-                onGoTransfer = { navController.navigate(Screens.Transfer()) },
+                onGoTransfer = { navController.navigateTopLevel(Screens.Transfer) },
+                onGoBookshelf = { },
                 onScroll = updateTopBarVisibility,
                 isTopBarVisible = isTopBarVisible,
+                mode = BookshelfScreenMode.Library,
+                requestInitialFocus = contentFocusRequestVersion > 0,
             )
         }
         composable(Screens.Transfer()) {
             TransferScreen()
+        }
+        composable(Screens.Settings()) {
+            SettingsScreen()
         }
     }
