@@ -19,8 +19,8 @@ package com.wzl.duskreader.tv.presentation.theme
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ShapeDefaults
 
-val JetStreamCardShape = ShapeDefaults.ExtraSmall
-val JetStreamButtonShape = ShapeDefaults.ExtraSmall
+val JetStreamCardShape = ShapeDefaults.Large
+val JetStreamButtonShape = ShapeDefaults.Large
 val IconSize = 20.dp
 val JetStreamBorderWidth = 3.dp
 

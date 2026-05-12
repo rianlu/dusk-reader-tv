@@ -53,11 +53,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Border
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Glow
-import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
@@ -68,6 +65,8 @@ import com.wzl.duskreader.tv.data.entities.hasReadingHistory
 import com.wzl.duskreader.tv.data.entities.progressRatio
 import com.wzl.duskreader.tv.presentation.common.BookCard
 import com.wzl.duskreader.tv.presentation.common.BookCover
+import com.wzl.duskreader.tv.presentation.common.DuskTvButton
+import com.wzl.duskreader.tv.presentation.common.DuskTvButtonStyle
 import com.wzl.duskreader.tv.presentation.common.Loading
 import com.wzl.duskreader.tv.presentation.screens.dashboard.rememberChildPadding
 import java.util.Locale
@@ -380,42 +379,31 @@ private fun ContinueReadingStage(
                         modifier = Modifier.focusGroup(),
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        Button(
-                            onClick = onContinue,
+                        DuskTvButton(
+                            text = if (book.hasReadingHistory()) "继续阅读" else "开始阅读",
+                            icon = Icons.Default.PlayArrow,
                             modifier = Modifier
                                 .focusRequester(continueRequester)
                                 .focusProperties {
                                     left = FocusRequester.Cancel
                                     down = downRequester
                                 },
-                            shape = ButtonDefaults.shape(MaterialTheme.shapes.large),
-                        ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(if (book.hasReadingHistory()) "继续阅读" else "开始阅读")
-                        }
-                        Button(
-                            onClick = onGoBookshelf,
+                            contentDescription = null,
+                            onClick = onContinue,
+                        )
+                        DuskTvButton(
+                            text = "进入书库",
+                            icon = Icons.AutoMirrored.Filled.LibraryBooks,
+                            style = DuskTvButtonStyle.Secondary,
                             modifier = Modifier
                                 .focusRequester(libraryRequester)
                                 .focusProperties {
                                     right = FocusRequester.Cancel
                                     down = downRequester
                                 },
-                            shape = ButtonDefaults.shape(MaterialTheme.shapes.large),
-                            colors = ButtonDefaults.colors(
-                                containerColor = Color.White.copy(alpha = 0.10f),
-                                contentColor = Color.White,
-                            ),
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.LibraryBooks,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text("进入书库")
-                        }
+                            contentDescription = null,
+                            onClick = onGoBookshelf,
+                        )
                     }
                 }
             }
@@ -452,24 +440,19 @@ private fun LibraryHeader(
                 subtitle = "共 $totalCount 本 · 当前显示 $shownCount 本 · ${rescanState.label()}",
                 modifier = Modifier.weight(1f),
             )
-            Button(
-                onClick = onRefresh,
+            DuskTvButton(
+                text = if (rescanState is RescanState.Scanning) "扫描中…" else "刷新书库",
+                icon = Icons.Default.Refresh,
+                style = DuskTvButtonStyle.Secondary,
                 modifier = Modifier
                     .focusRequester(refreshRequester)
                     .focusProperties {
                         right = FocusRequester.Cancel
                         down = downRequester
                     },
-                shape = ButtonDefaults.shape(MaterialTheme.shapes.large),
-                colors = ButtonDefaults.colors(
-                    containerColor = Color.White.copy(alpha = 0.10f),
-                    contentColor = Color.White,
-                ),
-            ) {
-                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(if (rescanState is RescanState.Scanning) "扫描中…" else "刷新书库")
-            }
+                contentDescription = null,
+                onClick = onRefresh,
+            )
         }
 
         Row(
@@ -780,12 +763,14 @@ private fun EmptyBookshelf(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = onGoTransfer) { Text("前往传书") }
-                    Button(onClick = onRefresh) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (rescanState is RescanState.Scanning) "扫描中…" else "刷新书库")
-                    }
+                    DuskTvButton(text = "前往传书", onClick = onGoTransfer)
+                    DuskTvButton(
+                        text = if (rescanState is RescanState.Scanning) "扫描中…" else "刷新书库",
+                        icon = Icons.Default.Refresh,
+                        style = DuskTvButtonStyle.Secondary,
+                        contentDescription = null,
+                        onClick = onRefresh,
+                    )
                 }
             }
         }

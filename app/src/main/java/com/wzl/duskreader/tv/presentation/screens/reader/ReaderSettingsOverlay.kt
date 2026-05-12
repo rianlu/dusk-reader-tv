@@ -1,6 +1,7 @@
 @file:OptIn(
     androidx.tv.material3.ExperimentalTvMaterial3Api::class,
     androidx.compose.ui.ExperimentalComposeUiApi::class,
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
 )
 
 package com.wzl.duskreader.tv.presentation.screens.reader
@@ -22,16 +23,20 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -45,6 +50,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 @Composable
 fun ReaderSettingsOverlay(
@@ -234,9 +240,17 @@ private fun StepperField(
     modifier: Modifier = Modifier,
     decrementRequester: FocusRequester? = null,
 ) {
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val scope = rememberCoroutineScope()
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .bringIntoViewRequester(bringIntoViewRequester)
+            .onFocusChanged { focusState ->
+                if (focusState.hasFocus) {
+                    scope.launch { bringIntoViewRequester.bringIntoView() }
+                }
+            }
             .focusGroup(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
@@ -315,8 +329,16 @@ private fun OptionCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val scope = rememberCoroutineScope()
     Column(
-        modifier = modifier,
+        modifier = modifier
+            .bringIntoViewRequester(bringIntoViewRequester)
+            .onFocusChanged { focusState ->
+                if (focusState.hasFocus) {
+                    scope.launch { bringIntoViewRequester.bringIntoView() }
+                }
+            },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Surface(
@@ -355,8 +377,16 @@ private fun ThemeOption(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val scope = rememberCoroutineScope()
     Column(
-        modifier = modifier,
+        modifier = modifier
+            .bringIntoViewRequester(bringIntoViewRequester)
+            .onFocusChanged { focusState ->
+                if (focusState.hasFocus) {
+                    scope.launch { bringIntoViewRequester.bringIntoView() }
+                }
+            },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Surface(

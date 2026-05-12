@@ -31,7 +31,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 
@@ -93,7 +92,12 @@ fun StoragePermissionHandler(
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(Modifier.height(20.dp))
-                Button(
+                DuskTvButton(
+                    text = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        "前往系统设置授权"
+                    } else {
+                        "点击授予权限"
+                    },
                     onClick = {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                             val specific = Intent(
@@ -109,13 +113,7 @@ fun StoragePermissionHandler(
                             legacyLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                         }
                     },
-                ) {
-                    Text(
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            "前往系统设置授权"
-                        } else "点击授予权限",
-                    )
-                }
+                )
             }
         }
     }

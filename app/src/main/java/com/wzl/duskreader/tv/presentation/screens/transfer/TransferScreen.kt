@@ -38,12 +38,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
+import com.wzl.duskreader.tv.presentation.common.DuskTvButton
+import com.wzl.duskreader.tv.presentation.common.DuskTvButtonStyle
 import com.wzl.duskreader.tv.presentation.screens.dashboard.rememberChildPadding
 import java.util.Date
 
@@ -171,12 +171,7 @@ private fun TransferIdleLayout(onStart: () -> Unit) {
                     color = Color.White.copy(alpha = 0.72f),
                 )
             }
-            Button(
-                onClick = onStart,
-                shape = ButtonDefaults.shape(MaterialTheme.shapes.large),
-            ) {
-                Text("开启无线传书")
-            }
+            DuskTvButton(text = "开启无线传书", onClick = onStart)
         }
     }
 }
@@ -302,22 +297,12 @@ private fun ReadyTransferLayout(
                 modifier = Modifier.focusGroup(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Button(
-                    onClick = onCopyAddress,
-                    shape = ButtonDefaults.shape(MaterialTheme.shapes.large),
-                ) {
-                    Text("复制地址")
-                }
-                Button(
+                DuskTvButton(text = "复制地址", onClick = onCopyAddress)
+                DuskTvButton(
+                    text = "刷新状态",
+                    style = DuskTvButtonStyle.Secondary,
                     onClick = onRefresh,
-                    shape = ButtonDefaults.shape(MaterialTheme.shapes.large),
-                    colors = ButtonDefaults.colors(
-                        containerColor = Color.White.copy(alpha = 0.10f),
-                        contentColor = Color.White,
-                    ),
-                ) {
-                    Text("刷新状态")
-                }
+                )
             }
         }
     }
@@ -380,12 +365,7 @@ private fun QrHeroCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.72f),
                     )
-                    Button(
-                        onClick = onCopyAddress,
-                        shape = ButtonDefaults.shape(MaterialTheme.shapes.large),
-                    ) {
-                        Text("复制到剪贴板")
-                    }
+                    DuskTvButton(text = "复制到剪贴板", onClick = onCopyAddress)
                 }
             }
         }
@@ -428,12 +408,7 @@ private fun UnavailableTransferLayout(
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color.White.copy(alpha = 0.72f),
                 )
-                Button(
-                    onClick = onRefresh,
-                    shape = ButtonDefaults.shape(MaterialTheme.shapes.large),
-                ) {
-                    Text("重新探测")
-                }
+                DuskTvButton(text = "重新探测", onClick = onRefresh)
             }
         }
 

@@ -58,7 +58,7 @@ class ReaderViewModel @Inject constructor(
     private var epubEngine: EpubReaderEngine? = null
     private var bookChapters: List<BookChapter> = emptyList()
 
-    private var currentChapterIndex: Int = 0
+    private var currentChapterIndexValue: Int = 0
     private var currentChapterText: String = ""
 
     /** 当前章节内的字符偏移（从 0 开始），是阅读进度的一半 */
@@ -89,6 +89,9 @@ class ReaderViewModel @Inject constructor(
 
     private val _currentChapterTitle = MutableStateFlow("开始")
     val currentChapterTitle = _currentChapterTitle.asStateFlow()
+
+    private val _currentChapterIndex = MutableStateFlow(0)
+    val currentChapterIndex = _currentChapterIndex.asStateFlow()
 
     private val _isPaging = MutableStateFlow(false)
     val isPaging = _isPaging.asStateFlow()
@@ -173,7 +176,7 @@ class ReaderViewModel @Inject constructor(
 
             // 恢复阅读进度
             val maxIndex = (chapters.lastIndex).coerceAtLeast(0)
-            currentChapterIndex = effectiveBook.lastReadChapter.coerceIn(0, maxIndex)
+            currentChapterIndexValue = effectiveBook.lastReadChapter.coerceIn(0, maxIndex)
             currentCharOffsetInChapter = effectiveBook.lastReadPosition.coerceAtLeast(0)
 
             loadCurrentChapter()
@@ -185,7 +188,7 @@ class ReaderViewModel @Inject constructor(
     }
 
     private suspend fun loadCurrentChapter() {
-        val ch = bookChapters.getOrNull(currentChapterIndex) ?: return
+        val ch = bookChapters.getOrNull(currentChapterIndexValue) ?: return
         val cached = chapterTextCache.get(ch.chapterIndex)
         currentChapterText = if (cached != null) {
             cached
@@ -219,48 +222,65 @@ class ReaderViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.Default) {
             _isPaging.value = true
             val startTime = System.currentTimeMillis()
+            val pagingChapterIndex = currentChapterIndexValue
+            val chapterText = currentChapterText
             try {
                 val pageHeight = containerConstraints.maxHeight
                 val unbounded = Constraints(
                     maxWidth = containerConstraints.maxWidth,
-                    maxHeight = (pageHeight * MAX_CHAPTER_PAGES).coerceAtLeast(pageHeight),
+                    maxHeight = (pageHeight * PAGING_WINDOW_PAGES).coerceAtLeast(pageHeight),
                 )
-                val layoutResult: TextLayoutResult = try {
-                    textMeasurer.measure(
-                        text = currentChapterText,
-                        style = textStyle,
-                        constraints = unbounded,
-                        softWrap = true,
-                    )
-                } catch (oom: OutOfMemoryError) {
-                    Log.e(TAG, "measure 内存不足，跳过本次分页", oom)
-                    return@launch
-                } catch (t: Throwable) {
-                    Log.e(TAG, "measure 异常，跳过本次分页", t)
-                    return@launch
-                }
-
-                val totalLines = layoutResult.lineCount
                 val pages = mutableListOf<ReaderPage>()
-                var lineCursor = 0
+                var textOffset = 0
 
-                while (lineCursor < totalLines && pages.size < MAX_CHAPTER_PAGES) {
-                    val pageTop = layoutResult.getLineTop(lineCursor)
-                    val pageBottomLimit = pageTop + pageHeight
-                    var lastFitLine = lineCursor
-                    var probe = lineCursor
-                    while (probe < totalLines && layoutResult.getLineBottom(probe) <= pageBottomLimit) {
-                        lastFitLine = probe
-                        probe++
+                while (textOffset < chapterText.length) {
+                    val windowText = chapterText.substring(textOffset)
+                    val layoutResult: TextLayoutResult = try {
+                        textMeasurer.measure(
+                            text = windowText,
+                            style = textStyle,
+                            constraints = unbounded,
+                            softWrap = true,
+                        )
+                    } catch (oom: OutOfMemoryError) {
+                        Log.e(TAG, "measure 内存不足，跳过本次分页", oom)
+                        return@launch
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "measure 异常，跳过本次分页", t)
+                        return@launch
                     }
-                    val pageStartChar = layoutResult.getLineStart(lineCursor)
-                    val pageEndChar = layoutResult.getLineEnd(lastFitLine, visibleEnd = true)
-                    pages += ReaderPage(
-                        content = currentChapterText.substring(pageStartChar, pageEndChar),
-                        startOffset = pageStartChar,
-                        endOffset = pageEndChar,
-                    )
-                    lineCursor = lastFitLine + 1
+
+                    val totalLines = layoutResult.lineCount
+                    if (totalLines <= 0) break
+
+                    var lineCursor = 0
+                    var lastWindowEnd = 0
+                    while (lineCursor < totalLines) {
+                        val pageTop = layoutResult.getLineTop(lineCursor)
+                        val pageBottomLimit = pageTop + pageHeight
+                        var lastFitLine = lineCursor
+                        var probe = lineCursor
+                        while (probe < totalLines && layoutResult.getLineBottom(probe) <= pageBottomLimit) {
+                            lastFitLine = probe
+                            probe++
+                        }
+                        val pageStartChar = layoutResult.getLineStart(lineCursor)
+                        val pageEndChar = layoutResult.getLineEnd(lastFitLine, visibleEnd = true)
+                        if (pageEndChar <= lastWindowEnd) break
+
+                        val absoluteStart = textOffset + pageStartChar
+                        val absoluteEnd = textOffset + pageEndChar
+                        pages += ReaderPage(
+                            content = chapterText.substring(absoluteStart, absoluteEnd),
+                            startOffset = absoluteStart,
+                            endOffset = absoluteEnd,
+                        )
+                        lastWindowEnd = pageEndChar
+                        lineCursor = lastFitLine + 1
+                    }
+
+                    if (lastWindowEnd <= 0) break
+                    textOffset += lastWindowEnd
                 }
 
                 // 根据章节内字符偏移定位到对应页
@@ -271,11 +291,13 @@ class ReaderViewModel @Inject constructor(
                     if (found < 0) pages.lastIndex else found
                 }
 
-                _pendingPageIndex.value = targetIndex
-                _pages.value = pages
+                if (pagingChapterIndex == currentChapterIndexValue && chapterText == currentChapterText) {
+                    _pendingPageIndex.value = targetIndex
+                    _pages.value = pages
+                }
                 Log.d(
                     TAG,
-                    "章节分页 idx=$currentChapterIndex 页数=${pages.size} 耗时=${System.currentTimeMillis() - startTime}ms",
+                    "章节分页 idx=$currentChapterIndexValue 页数=${pages.size} 耗时=${System.currentTimeMillis() - startTime}ms",
                 )
             } finally {
                 _isPaging.value = false
@@ -293,8 +315,8 @@ class ReaderViewModel @Inject constructor(
     /** 翻到下一章节（在 ReaderScreen.moveForward 已是末页时调用） */
     fun loadNextChapter() {
         if (_isPaging.value) return
-        if (currentChapterIndex >= bookChapters.lastIndex) return
-        currentChapterIndex++
+        if (currentChapterIndexValue >= bookChapters.lastIndex) return
+        currentChapterIndexValue++
         currentCharOffsetInChapter = 0
         viewModelScope.launch {
             loadCurrentChapter()
@@ -307,8 +329,8 @@ class ReaderViewModel @Inject constructor(
     /** 翻到上一章节（在 ReaderScreen.moveBackward 已是首页时调用），落点是上一章末页 */
     fun loadPreviousChapter() {
         if (_isPaging.value) return
-        if (currentChapterIndex <= 0) return
-        currentChapterIndex--
+        if (currentChapterIndexValue <= 0) return
+        currentChapterIndexValue--
         viewModelScope.launch {
             loadCurrentChapter()
             // 落点设到章节末，performPaging 会算出末页并触发 pendingPageIndex
@@ -323,7 +345,7 @@ class ReaderViewModel @Inject constructor(
     fun jumpToChapter(chapterIndex: Int) {
         if (_isPaging.value) return
         val target = chapterIndex.coerceIn(0, bookChapters.lastIndex.coerceAtLeast(0))
-        currentChapterIndex = target
+        currentChapterIndexValue = target
         currentCharOffsetInChapter = 0
         viewModelScope.launch {
             loadCurrentChapter()
@@ -393,7 +415,7 @@ class ReaderViewModel @Inject constructor(
         val bk = book ?: return@withContext
         repository.update(
             bk.copy(
-                lastReadChapter = currentChapterIndex,
+                lastReadChapter = currentChapterIndexValue,
                 lastReadPosition = currentCharOffsetInChapter,
                 lastReadTime = System.currentTimeMillis(),
             ),
@@ -423,7 +445,7 @@ class ReaderViewModel @Inject constructor(
 
     private fun updateProgress() {
         val total = bookChapters.size.coerceAtLeast(1)
-        val chapterRatio = currentChapterIndex.toFloat() / total
+        val chapterRatio = currentChapterIndexValue.toFloat() / total
         val withinChapter = if (currentChapterText.isNotEmpty()) {
             (currentCharOffsetInChapter.toFloat() / currentChapterText.length) / total
         } else {
@@ -433,12 +455,13 @@ class ReaderViewModel @Inject constructor(
     }
 
     private fun updateCurrentChapterTitle() {
-        _currentChapterTitle.value = bookChapters.getOrNull(currentChapterIndex)?.title ?: "开始"
+        _currentChapterIndex.value = currentChapterIndexValue
+        _currentChapterTitle.value = bookChapters.getOrNull(currentChapterIndexValue)?.title ?: "开始"
     }
 
     companion object {
         private const val TAG = "ReaderVM"
-        private const val MAX_CHAPTER_PAGES = 200
+        private const val PAGING_WINDOW_PAGES = 80
         private const val FORMAT_EPUB = "EPUB"
     }
 }

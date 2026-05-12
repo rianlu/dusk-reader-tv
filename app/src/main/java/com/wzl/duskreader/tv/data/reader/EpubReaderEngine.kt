@@ -8,10 +8,10 @@ import org.w3c.dom.Element
 
 class EpubReaderEngine(private val file: File) {
 
-    private var cachedChapters: List<EpubChapter>? = null
+    private var cachedChapterRefs: List<EpubChapterRef>? = null
 
     fun scanChapters(): List<ChapterScanResult> {
-        return loadChapters().map { chapter ->
+        return loadChapterRefs().map { chapter ->
             ChapterScanResult(
                 title = chapter.title,
                 byteOffset = chapter.index.toLong(),
@@ -20,31 +20,37 @@ class EpubReaderEngine(private val file: File) {
     }
 
     fun readChapterText(chapterIndex: Int): String {
-        return loadChapters().getOrNull(chapterIndex)?.text.orEmpty()
+        val ref = loadChapterRefs().getOrNull(chapterIndex) ?: return ""
+        return ZipFile(file).use { zip ->
+            val entry = zip.getEntry(ref.entryName) ?: return@use ""
+            val html = zip.getInputStream(entry).bufferedReader(Charsets.UTF_8).use { it.readText() }
+            htmlToText(html)
+        }
     }
 
-    private fun loadChapters(): List<EpubChapter> {
-        cachedChapters?.let { return it }
+    private fun loadChapterRefs(): List<EpubChapterRef> {
+        cachedChapterRefs?.let { return it }
         val loaded = ZipFile(file).use { zip ->
             val opfPath = findPackagePath(zip)
             val spineEntries = if (opfPath != null) readSpineEntries(zip, opfPath) else emptyList()
             val contentEntries = spineEntries.ifEmpty { fallbackContentEntries(zip) }
             contentEntries.mapIndexedNotNull { index, entryName ->
                 val entry = zip.getEntry(entryName) ?: return@mapIndexedNotNull null
-                val html = zip.getInputStream(entry).bufferedReader(Charsets.UTF_8).use { it.readText() }
-                val text = htmlToText(html)
-                if (text.isBlank()) return@mapIndexedNotNull null
-                EpubChapter(
+                val title = zip.getInputStream(entry).bufferedReader(Charsets.UTF_8).use { reader ->
+                    extractTitle(reader.readText())
+                }
+                EpubChapterRef(
                     index = index,
-                    title = extractTitle(html).ifBlank { "第 ${index + 1} 章" },
-                    text = text,
+                    title = title.ifBlank { "第 ${index + 1} 章" },
+                    entryName = entryName,
                 )
             }.ifEmpty {
-                listOf(EpubChapter(index = 0, title = "正文", text = "EPUB 内容为空或暂无法解析"))
+                emptyList()
             }
         }
-        cachedChapters = loaded
-        return loaded
+        val refs = loaded.ifEmpty { listOf(EpubChapterRef(index = 0, title = "正文", entryName = "")) }
+        cachedChapterRefs = refs
+        return refs
     }
 
     private fun findPackagePath(zip: ZipFile): String? {
@@ -188,4 +194,10 @@ data class EpubChapter(
     val index: Int,
     val title: String,
     val text: String,
+)
+
+private data class EpubChapterRef(
+    val index: Int,
+    val title: String,
+    val entryName: String,
 )

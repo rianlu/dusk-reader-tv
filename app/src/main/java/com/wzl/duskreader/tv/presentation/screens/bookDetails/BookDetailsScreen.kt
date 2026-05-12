@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
@@ -31,19 +30,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
-import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.wzl.duskreader.tv.data.entities.Book
 import com.wzl.duskreader.tv.data.entities.hasReadingHistory
 import com.wzl.duskreader.tv.data.entities.progressRatio
 import com.wzl.duskreader.tv.presentation.common.BookCover
+import com.wzl.duskreader.tv.presentation.common.DuskTvButton
 import com.wzl.duskreader.tv.presentation.common.Error
 import com.wzl.duskreader.tv.presentation.common.Loading
 import com.wzl.duskreader.tv.presentation.screens.dashboard.rememberChildPadding
-import com.wzl.duskreader.tv.presentation.theme.JetStreamButtonShape
 import java.util.Locale
 
 object BookDetailsScreen {
@@ -213,19 +209,13 @@ private fun StartReadingButton(
     hasProgress: Boolean,
     onClick: () -> Unit,
 ) {
-    Button(
-        onClick = onClick,
+    DuskTvButton(
+        text = if (hasProgress) "继续阅读" else "开始阅读",
+        icon = Icons.AutoMirrored.Outlined.MenuBook,
         modifier = modifier,
-        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-        shape = ButtonDefaults.shape(shape = JetStreamButtonShape),
-    ) {
-        Icon(imageVector = Icons.AutoMirrored.Outlined.MenuBook, contentDescription = null)
-        Spacer(Modifier.size(8.dp))
-        Text(
-            text = if (hasProgress) "继续阅读" else "开始阅读",
-            style = MaterialTheme.typography.titleSmall,
-        )
-    }
+        contentDescription = null,
+        onClick = onClick,
+    )
 }
 
 private fun formatFileSize(bytes: Long): String {

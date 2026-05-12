@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
@@ -79,6 +80,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
+import com.wzl.duskreader.tv.presentation.common.DuskTvButton
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -100,6 +102,7 @@ fun ReaderScreen(
     val chapters by viewModel.chapters.collectAsStateWithLifecycle()
     val totalProgress by viewModel.totalProgress.collectAsStateWithLifecycle()
     val currentChapterTitle by viewModel.currentChapterTitle.collectAsStateWithLifecycle()
+    val currentChapterIndex by viewModel.currentChapterIndex.collectAsStateWithLifecycle()
     val pagingRequestVersion by viewModel.pagingRequestVersion.collectAsStateWithLifecycle()
     val pendingPageIndex by viewModel.pendingPageIndex.collectAsStateWithLifecycle()
     val bookTitle by viewModel.bookTitle.collectAsStateWithLifecycle()
@@ -120,8 +123,9 @@ fun ReaderScreen(
 
     val readerPanelRequester = remember { FocusRequester() }
     val controlPrimaryRequester = remember { FocusRequester() }
-    val tocFirstItemRequester = remember { FocusRequester() }
+    val tocCurrentItemRequester = remember { FocusRequester() }
     val settingsFirstRowRequester = remember { FocusRequester() }
+    val tocListState = rememberLazyListState()
 
     val scope = rememberCoroutineScope()
     val textMeasurer = rememberTextMeasurer()
@@ -159,7 +163,10 @@ fun ReaderScreen(
         delay(80)
         runCatching {
             when {
-                showToc -> tocFirstItemRequester.requestFocus()
+                showToc -> {
+                    tocListState.scrollToItem(currentChapterIndex.coerceIn(0, chapters.lastIndex.coerceAtLeast(0)))
+                    tocCurrentItemRequester.requestFocus()
+                }
                 showSettings -> settingsFirstRowRequester.requestFocus()
                 showControls -> controlPrimaryRequester.requestFocus()
                 else -> readerPanelRequester.requestFocus()
@@ -579,21 +586,32 @@ fun ReaderScreen(
                         modifier = Modifier
                             .weight(1f)
                             .focusRestorer(),
+                        state = tocListState,
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         itemsIndexed(chapters) { index, chapter ->
+                            val isCurrent = chapter.index == currentChapterIndex
                             Surface(
                                 onClick = {
                                     viewModel.jumpToChapter(chapter.index)
                                     showToc = false
                                     showControls = false
                                 },
-                                modifier = if (index == 0) Modifier.focusRequester(tocFirstItemRequester) else Modifier,
+                                modifier = if (isCurrent) Modifier.focusRequester(tocCurrentItemRequester) else Modifier,
                                 colors = ClickableSurfaceDefaults.colors(
-                                    containerColor = Color.White.copy(alpha = 0.05f),
+                                    containerColor = if (isCurrent) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.05f),
                                     focusedContainerColor = Color.White,
                                     focusedContentColor = Color.Black,
                                     contentColor = Color.White,
+                                ),
+                                border = ClickableSurfaceDefaults.border(
+                                    border = if (isCurrent) {
+                                        androidx.tv.material3.Border(
+                                            androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.42f)),
+                                        )
+                                    } else {
+                                        androidx.tv.material3.Border.None
+                                    },
                                 ),
                                 shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.medium),
                             ) {
@@ -620,26 +638,13 @@ private fun ControlButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        onClick = onClick,
+    DuskTvButton(
+        text = label,
+        icon = icon,
         modifier = modifier,
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.White.copy(alpha = 0.08f),
-            focusedContainerColor = Color.White,
-            contentColor = Color.White,
-            focusedContentColor = Color.Black,
-        ),
-        shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.large),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 26.dp, vertical = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(imageVector = icon, contentDescription = label, modifier = Modifier.size(20.dp))
-            Text(text = label, style = MaterialTheme.typography.labelLarge)
-        }
-    }
+        contentDescription = label,
+        onClick = onClick,
+    )
 }
 
 @Composable
