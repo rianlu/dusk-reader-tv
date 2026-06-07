@@ -1,5 +1,7 @@
 package com.wzl.duskreader.tv.presentation.screens.dashboard
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
@@ -176,11 +178,14 @@ private fun NavHostController.navigateTopLevel(screen: Screens) {
     val targetRoute = screen()
     if (currentDestination?.route == targetRoute) return
     navigate(targetRoute) {
-        popUpTo(Screens.Home()) {
-            saveState = true
+        // 与 JetStream 一致：只在切到首页时清空 back stack，其余 tab 只追加。
+        // back stack entry 保留 → ViewModel 不销毁 → 切 tab 无需重新查询 Room → 无 loading 闪烁。
+        // 返回键行为：Home → 按返回由 Dashboard.onBackPressed 处理（聚焦顶栏/退出）；
+        // 其他 tab → 按返回逐层回退到上一个 tab → 最终到 Home。
+        if (screen == TopBarTabs[0]) {
+            popUpTo(TopBarTabs[0].invoke())
         }
         launchSingleTop = true
-        restoreState = true
     }
 }
 
@@ -218,6 +223,12 @@ private fun Body(
         modifier = modifier,
         navController = navController,
         startDestination = Screens.Home(),
+        // TV 顶部 tab 切换应「即时换页」：去掉 navigation-compose 默认的 ~700ms 淡入淡出，
+        // 消除每次切换时内容区先发虚再浮现的「闪一下」，以及双页面叠加重绘带来的卡顿。
+        enterTransition = { EnterTransition.None },
+        exitTransition = { ExitTransition.None },
+        popEnterTransition = { EnterTransition.None },
+        popExitTransition = { ExitTransition.None },
     ) {
         composable(Screens.Home()) {
             BookshelfScreen(

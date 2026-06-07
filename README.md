@@ -4,8 +4,10 @@ Android TV 本地阅读器，当前正在按 Apple TV 风格重构 UI 和交互�
 
 ## 当前文档入口
 
-- 设计规格：
-  [docs/superpowers/specs/2026-04-20-dusk-reader-redesign-design.md](/Users/lu/AIProjects/dusk-reader-tv/docs/superpowers/specs/2026-04-20-dusk-reader-redesign-design.md)
+- **设计基准(以阅读页为准,唯一事实来源)**：
+  [docs/superpowers/specs/2026-05-31-dusk-reader-design-baseline.md](/Users/lu/AIProjects/dusk-reader-tv/docs/superpowers/specs/2026-05-31-dusk-reader-design-baseline.md)
+- 功能与页面状态：
+  [docs/superpowers/specs/2026-04-30-dusk-reader-functional-design.md](/Users/lu/AIProjects/dusk-reader-tv/docs/superpowers/specs/2026-04-30-dusk-reader-functional-design.md)
 
 ## 当前产品基线
 

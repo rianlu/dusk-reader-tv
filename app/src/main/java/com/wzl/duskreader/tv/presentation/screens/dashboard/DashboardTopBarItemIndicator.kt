@@ -35,14 +35,13 @@ import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.width
 import androidx.compose.ui.zIndex
-import androidx.tv.material3.MaterialTheme
 
 @Composable
 fun DashboardTopBarItemIndicator(
     currentTabPosition: DpRect,
     modifier: Modifier = Modifier,
-    activeColor: Color = Color(0xFFE5E1E6),
-    inactiveColor: Color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f),
+    activeColor: Color = Color.White,
+    inactiveColor: Color = Color.White.copy(alpha = 0.14f),
     anyTabFocused: Boolean,
     shape: Shape
 ) {

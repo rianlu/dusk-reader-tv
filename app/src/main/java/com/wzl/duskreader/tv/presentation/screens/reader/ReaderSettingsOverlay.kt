@@ -29,8 +29,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -209,9 +212,7 @@ fun ReaderSettingsOverlay(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Row(
-                    modifier = Modifier
-                        .focusGroup()
-                        .focusProperties { down = FocusRequester.Cancel },
+                    modifier = Modifier.focusGroup(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     ReaderTheme.values().forEachIndexed { index, theme ->
@@ -349,6 +350,10 @@ private fun StepperButton(
             contentColor = Color.White,
             focusedContentColor = Color.Black,
         ),
+        border = ClickableSurfaceDefaults.border(
+            focusedBorder = Border(BorderStroke(2.dp, Color.White), shape = CircleShape),
+        ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             androidx.tv.material3.Icon(
@@ -369,10 +374,12 @@ private fun OptionCard(
 ) {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
+    var isFocused by remember { mutableStateOf(false) }
     Column(
         modifier = modifier
             .bringIntoViewRequester(bringIntoViewRequester)
             .onFocusChanged { focusState ->
+                isFocused = focusState.hasFocus
                 if (focusState.hasFocus) {
                     scope.launch { bringIntoViewRequester.bringIntoView() }
                 }
@@ -386,13 +393,16 @@ private fun OptionCard(
                 .height(60.dp),
             shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.large),
             colors = ClickableSurfaceDefaults.colors(
-                containerColor = Color(0xFF222222),
-                focusedContainerColor = Color(0xFF303030),
+                containerColor = if (selected) Color.White.copy(alpha = 0.16f) else Color(0xFF222222),
+                focusedContainerColor = Color.White,
+                contentColor = Color.White,
+                focusedContentColor = Color.Black,
             ),
             border = ClickableSurfaceDefaults.border(
-                border = if (selected) Border(BorderStroke(2.dp, Color.White)) else Border.None,
+                border = Border.None,
                 focusedBorder = Border(BorderStroke(2.dp, Color.White)),
             ),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
         ) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -400,7 +410,11 @@ private fun OptionCard(
             ) {
                 Text(
                     text = label,
-                    color = if (selected) Color.White else Color.White.copy(alpha = 0.78f),
+                    color = when {
+                        isFocused -> Color.Black
+                        selected -> Color.White
+                        else -> Color.White.copy(alpha = 0.78f)
+                    },
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                 )
             }
@@ -417,10 +431,12 @@ private fun ThemeOption(
 ) {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
+    var isFocused by remember { mutableStateOf(false) }
     Column(
         modifier = modifier
             .bringIntoViewRequester(bringIntoViewRequester)
             .onFocusChanged { focusState ->
+                isFocused = focusState.hasFocus
                 if (focusState.hasFocus) {
                     scope.launch { bringIntoViewRequester.bringIntoView() }
                 }
@@ -434,13 +450,14 @@ private fun ThemeOption(
                 .height(92.dp),
             shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.large),
             colors = ClickableSurfaceDefaults.colors(
-                containerColor = Color(0xFF222222),
-                focusedContainerColor = Color(0xFF303030),
+                containerColor = if (selected) Color.White.copy(alpha = 0.16f) else Color(0xFF222222),
+                focusedContainerColor = Color.White,
             ),
             border = ClickableSurfaceDefaults.border(
-                border = if (selected) Border(BorderStroke(2.dp, Color.White)) else Border.None,
+                border = Border.None,
                 focusedBorder = Border(BorderStroke(2.dp, Color.White)),
             ),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
         ) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -475,7 +492,11 @@ private fun ThemeOption(
         Text(
             text = theme.displayName,
             style = MaterialTheme.typography.labelMedium,
-            color = if (selected) Color.White else Color.White.copy(alpha = 0.56f),
+            color = when {
+                isFocused -> Color.White
+                selected -> Color.White
+                else -> Color.White.copy(alpha = 0.56f)
+            },
             textAlign = TextAlign.Center,
         )
     }

@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
@@ -16,6 +17,10 @@ import androidx.tv.material3.Surface
 fun BookCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    focusedBorderWidth: Dp = 2.dp,
+    focusedGlowElevation: Dp = 12.dp,
+    focusedGlowAlpha: Float = 0.18f,
+    focusedScale: Float = 1.04f,
     title: @Composable () -> Unit = {},
     image: @Composable BoxScope.() -> Unit,
 ) {
@@ -29,7 +34,7 @@ fun BookCard(
                 border = ClickableSurfaceDefaults.border(
                     focusedBorder = Border(
                         border = BorderStroke(
-                            width = 2.dp,
+                            width = focusedBorderWidth,
                             color = MaterialTheme.colorScheme.onSurface,
                         ),
                         shape = MaterialTheme.shapes.medium,
@@ -37,11 +42,11 @@ fun BookCard(
                 ),
                 glow = ClickableSurfaceDefaults.glow(
                     focusedGlow = Glow(
-                        elevation = 12.dp,
-                        elevationColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
+                        elevation = focusedGlowElevation,
+                        elevationColor = MaterialTheme.colorScheme.onSurface.copy(alpha = focusedGlowAlpha),
                     ),
                 ),
-                scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
+                scale = ClickableSurfaceDefaults.scale(focusedScale = focusedScale),
                 content = image,
             )
         },

@@ -33,7 +33,7 @@ class TransferScreenViewModel @Inject constructor(
         if (started) snapshotToUiState(snapshot) else TransferScreenUiState.Idle
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
+        started = SharingStarted.Eagerly,
         initialValue = TransferScreenUiState.Idle,
     )
 

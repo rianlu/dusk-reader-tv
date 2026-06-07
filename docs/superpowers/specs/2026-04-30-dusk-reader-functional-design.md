@@ -6,6 +6,11 @@
 
 ---
 
+> ⚠️ **更新（2026-05-31）**：设计基准改为「以阅读页为准」，见
+> [2026-05-31-dusk-reader-design-baseline.md](./2026-05-31-dusk-reader-design-baseline.md)。
+> 本文部分 `已实现` 状态与代码入口已据实修正：设置页目前为视觉骨架（入口未接动作）、
+> 阅读设置为即时生效（非草稿态）、首页与书库实为 `BookshelfScreen` 双模式复用。
+
 ## 1. 文档目的
 
 这份文档用于回答 3 个问题：
@@ -225,9 +230,8 @@
 
 **代码入口**
 
-- [HomeScreen.kt](/Users/lu/AIProjects/dusk-reader-tv/app/src/main/java/com/wzl/duskreader/tv/presentation/screens/home/HomeScreen.kt)
-- [HomeScreenViewModel.kt](/Users/lu/AIProjects/dusk-reader-tv/app/src/main/java/com/wzl/duskreader/tv/presentation/screens/home/HomeScreenViewModel.kt)
-- [BooksRow.kt](/Users/lu/AIProjects/dusk-reader-tv/app/src/main/java/com/wzl/duskreader/tv/presentation/common/BooksRow.kt)
+- 首页与书库复用同一 composable：[BookshelfScreen.kt](/Users/lu/AIProjects/dusk-reader-tv/app/src/main/java/com/wzl/duskreader/tv/presentation/screens/bookshelf/BookshelfScreen.kt)（`mode = BookshelfScreenMode.Home`）
+- [BookshelfScreenViewModel.kt](/Users/lu/AIProjects/dusk-reader-tv/app/src/main/java/com/wzl/duskreader/tv/presentation/screens/bookshelf/BookshelfScreenViewModel.kt)
 
 ---
 
@@ -261,8 +265,7 @@
 
 **代码入口**
 
-- [LibraryScreen.kt](/Users/lu/AIProjects/dusk-reader-tv/app/src/main/java/com/wzl/duskreader/tv/presentation/screens/library/LibraryScreen.kt)
-- [LibraryScreenViewModel.kt](/Users/lu/AIProjects/dusk-reader-tv/app/src/main/java/com/wzl/duskreader/tv/presentation/screens/library/LibraryScreenViewModel.kt)
+- 同上，复用 [BookshelfScreen.kt](/Users/lu/AIProjects/dusk-reader-tv/app/src/main/java/com/wzl/duskreader/tv/presentation/screens/bookshelf/BookshelfScreen.kt)（`mode = BookshelfScreenMode.Library`）
 
 ---
 
@@ -320,12 +323,11 @@
 
 **当前已有功能**
 
-- `已实现` 分组展示“书库与权限 / 阅读偏好 / 数据与维护 / 关于应用”
-- `已实现` 提供“重新扫描书库”操作
-- `已实现` 提供“前往系统权限设置”入口
-- `已实现` 展示阅读页设置入口说明
-- `已实现` 展示本地数据与传书服务说明
-- `已实现` 展示版本号、包名与应用信息
+- `已实现` 分组展示“书库与权限 / 阅读偏好 / 数据与应用”（视觉已对齐阅读页基准：白底反白聚焦 / 16dp / 1.04）
+- `部分实现` **目前仅为视觉骨架**：所有入口的 `onClick` 均弹出 `Toast("该入口尚未启用")`，无实际行为，也无 ViewModel
+- `待实现` “重新扫描书库”动作（未调用 `scanLocalStorage()`）
+- `待实现` “前往系统权限设置”跳转
+- `待实现` 阅读偏好 / 数据维护二级页
 
 **当前问题**
 
@@ -396,7 +398,7 @@
 - `已实现` 记录阅读进度
 - `已实现` 目录扫描与章节跳转
 - `已实现` 阅读设置抽屉
-- `已实现` 设置草稿态、确认应用、取消回退
+- `已实现` 阅读设置**即时生效并持久化**（`ReaderSettingsStore` → SharedPreferences，全局偏好）；无草稿 / 确认 / 取消
 - `已实现` 4 组背景主题切换
 - `已实现` 字体大小、行距、段间距调整
 - `已实现` 控制层、目录层、设置层基本结构
@@ -404,7 +406,7 @@
 
 **当前问题**
 
-- `部分实现` 阅读设置还未持久化到全局偏好
+- `已实现` 阅读设置已通过 `ReaderSettingsStore` 持久化为全局偏好
 - `部分实现` 需要继续做 TV 模拟器上的长时回归，验证分页窗口切换稳定性
 - `部分实现` EPUB 前端阅读链路仍未补齐
 
@@ -523,7 +525,7 @@
 代码入口：
 
 - [TxtReaderEngine.kt](/Users/lu/AIProjects/dusk-reader-tv/app/src/main/java/com/wzl/duskreader/tv/data/reader/TxtReaderEngine.kt)
-- [ReaderProgressCodec.kt](/Users/lu/AIProjects/dusk-reader-tv/app/src/main/java/com/wzl/duskreader/tv/data/reader/ReaderProgressCodec.kt)
+- 进度策略：[ReadingHistoryPolicy.kt](/Users/lu/AIProjects/dusk-reader-tv/app/src/main/java/com/wzl/duskreader/tv/data/entities/ReadingHistoryPolicy.kt)（`progressRatio()` 等；分页与进度恢复在 `ReaderViewModel` 内）
 
 ### 7.4 传书服务能力
 
@@ -641,8 +643,7 @@
 
 ### 11.2 页面实现入口
 
-- 首页：[HomeScreen.kt](/Users/lu/AIProjects/dusk-reader-tv/app/src/main/java/com/wzl/duskreader/tv/presentation/screens/home/HomeScreen.kt)
-- 书库：[LibraryScreen.kt](/Users/lu/AIProjects/dusk-reader-tv/app/src/main/java/com/wzl/duskreader/tv/presentation/screens/library/LibraryScreen.kt)
+- 首页 / 书库（同一文件双模式）：[BookshelfScreen.kt](/Users/lu/AIProjects/dusk-reader-tv/app/src/main/java/com/wzl/duskreader/tv/presentation/screens/bookshelf/BookshelfScreen.kt)
 - 传书：[TransferScreen.kt](/Users/lu/AIProjects/dusk-reader-tv/app/src/main/java/com/wzl/duskreader/tv/presentation/screens/transfer/TransferScreen.kt)
 - 设置：[SettingsScreen.kt](/Users/lu/AIProjects/dusk-reader-tv/app/src/main/java/com/wzl/duskreader/tv/presentation/screens/settings/SettingsScreen.kt)
 - 详情：[BookDetailsScreen.kt](/Users/lu/AIProjects/dusk-reader-tv/app/src/main/java/com/wzl/duskreader/tv/presentation/screens/bookDetails/BookDetailsScreen.kt)

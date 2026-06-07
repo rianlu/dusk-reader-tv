@@ -2,22 +2,14 @@ package com.wzl.duskreader.tv.presentation.common
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.wzl.duskreader.tv.data.entities.Book
@@ -39,19 +31,17 @@ fun BookCover(
             contentScale = ContentScale.Crop,
         )
     } else {
-        DefaultBookCover(book = book, modifier = modifier)
+        // 无封面图：只显示渐变占位，标题由调用方在封面下方独立显示，
+        // 避免标题重复出现（一次在封面里、一次在标题行）。
+        DefaultBookCover(modifier = modifier)
     }
 }
 
 @Composable
 private fun DefaultBookCover(
-    book: Book,
     modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.BottomStart,
-    ) {
+    Box(modifier = modifier) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -80,26 +70,5 @@ private fun DefaultBookCover(
                     ),
                 ),
         )
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
-        ) {
-            Text(
-                text = book.title,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = Color.White,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (!book.author.isNullOrBlank()) {
-                Text(
-                    text = book.author,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.72f),
-                    modifier = Modifier.padding(top = 6.dp),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
     }
 }

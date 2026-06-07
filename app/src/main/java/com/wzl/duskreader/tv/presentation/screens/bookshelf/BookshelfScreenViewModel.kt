@@ -29,16 +29,18 @@ class BookshelfScreenViewModel @Inject constructor(
         BookshelfUiState.Ready(
             recentBooks = recent,
             allBooks = all,
-        ) as BookshelfUiState
+        )
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
+        started = SharingStarted.Eagerly,
+        // Loading 态只渲染背景（无内容），避免空书架卡片闪一下。
+        // Room 查询通常 < 10ms，Loading 态几乎不可见。切 tab 时 ViewModel 不重建，不经过此状态。
         initialValue = BookshelfUiState.Loading,
     )
 
     fun rescanLibrary() {
-        if (_rescanState.value is RescanState.Scanning) return
         viewModelScope.launch {
+            if (_rescanState.value is RescanState.Scanning) return@launch
             _rescanState.value = RescanState.Scanning
             runCatching { bookRepository.scanLocalStorage() }
                 .onSuccess { imported -> _rescanState.value = RescanState.Done(imported) }

@@ -302,11 +302,16 @@ fun ReaderScreen(
                                     true
                                 }
 
-                                KeyEvent.KEYCODE_DPAD_LEFT -> if (immersive && pageTurnMode == PageTurnMode.HORIZONTAL) {
-                                    moveBackward()
-                                    true
-                                } else {
-                                    false
+                                KeyEvent.KEYCODE_DPAD_LEFT -> when {
+                                    showToc -> {
+                                        showToc = false
+                                        true
+                                    }
+                                    immersive && pageTurnMode == PageTurnMode.HORIZONTAL -> {
+                                        moveBackward()
+                                        true
+                                    }
+                                    else -> false
                                 }
 
                                 KeyEvent.KEYCODE_DPAD_RIGHT -> if (immersive && pageTurnMode == PageTurnMode.HORIZONTAL) {
@@ -608,15 +613,14 @@ fun ReaderScreen(
                                     contentColor = Color.White,
                                 ),
                                 border = ClickableSurfaceDefaults.border(
-                                    border = if (isCurrent) {
-                                        androidx.tv.material3.Border(
-                                            androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.42f)),
-                                        )
-                                    } else {
-                                        androidx.tv.material3.Border.None
-                                    },
+                                    border = androidx.tv.material3.Border.None,
+                                    focusedBorder = androidx.tv.material3.Border(
+                                        androidx.compose.foundation.BorderStroke(2.dp, Color.White),
+                                        shape = MaterialTheme.shapes.medium,
+                                    ),
                                 ),
                                 shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.medium),
+                                scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
                             ) {
                                 Text(
                                     text = chapter.title,

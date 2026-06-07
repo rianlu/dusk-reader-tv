@@ -248,7 +248,6 @@ private fun ReadyTransferLayout(
                 .widthIn(min = 520.dp),
             url = url,
             qrCode = qrCode,
-            onCopyAddress = onCopyAddress,
         )
 
         Column(
@@ -313,7 +312,6 @@ private fun QrHeroCard(
     modifier: Modifier = Modifier,
     url: String,
     qrCode: Bitmap,
-    onCopyAddress: () -> Unit,
 ) {
     Surface(
         modifier = modifier,
@@ -365,7 +363,6 @@ private fun QrHeroCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.72f),
                     )
-                    DuskTvButton(text = "复制到剪贴板", onClick = onCopyAddress)
                 }
             }
         }
