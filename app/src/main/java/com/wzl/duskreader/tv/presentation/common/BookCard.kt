@@ -1,3 +1,5 @@
+@file:OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
+
 package com.wzl.duskreader.tv.presentation.common
 
 import androidx.compose.foundation.BorderStroke
@@ -8,7 +10,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
-import androidx.tv.material3.Glow
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.StandardCardContainer
 import androidx.tv.material3.Surface
@@ -18,9 +19,6 @@ fun BookCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     focusedBorderWidth: Dp = 2.dp,
-    focusedGlowElevation: Dp = 12.dp,
-    focusedGlowAlpha: Float = 0.18f,
-    focusedScale: Float = 1.04f,
     title: @Composable () -> Unit = {},
     image: @Composable BoxScope.() -> Unit,
 ) {
@@ -40,13 +38,7 @@ fun BookCard(
                         shape = MaterialTheme.shapes.medium,
                     ),
                 ),
-                glow = ClickableSurfaceDefaults.glow(
-                    focusedGlow = Glow(
-                        elevation = focusedGlowElevation,
-                        elevationColor = MaterialTheme.colorScheme.onSurface.copy(alpha = focusedGlowAlpha),
-                    ),
-                ),
-                scale = ClickableSurfaceDefaults.scale(focusedScale = focusedScale),
+                scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
                 content = image,
             )
         },

@@ -68,7 +68,7 @@ fun DashboardTopBar(
                 .focusRestorer(),
             shape = MaterialTheme.shapes.large,
             colors = SurfaceDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                containerColor = Color(0xFF070D15).copy(alpha = 0.94f),
             ),
         ) {
             Row(

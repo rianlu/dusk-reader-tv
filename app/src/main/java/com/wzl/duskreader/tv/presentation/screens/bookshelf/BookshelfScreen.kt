@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,25 +22,21 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.LibraryBooks
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,7 +54,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
-import androidx.tv.material3.Glow
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
@@ -68,32 +62,20 @@ import com.wzl.duskreader.tv.data.entities.Book
 import com.wzl.duskreader.tv.data.entities.BookList
 import com.wzl.duskreader.tv.data.entities.hasReadingHistory
 import com.wzl.duskreader.tv.data.entities.progressRatio
-import com.wzl.duskreader.tv.presentation.common.BookCard
 import com.wzl.duskreader.tv.presentation.common.BookCover
 import com.wzl.duskreader.tv.presentation.common.DuskTvButton
-import com.wzl.duskreader.tv.presentation.common.DuskTvButtonStyle
 import com.wzl.duskreader.tv.presentation.screens.dashboard.rememberChildPadding
-import java.util.Locale
 
-private const val RECENT_READING_LIMIT = 1
-private const val LIBRARY_ROW_LIMIT = 120
-private const val LIBRARY_GRID_COLUMNS = 4
-private val POSTER_ASPECT_RATIO = 10.5f / 16f
-private val RAIL_CARD_WIDTH = 154.dp
-
-// 顶栏隐藏阈值（像素）——沿用 JetStream 经验值：Home 列表 300、Library 网格 100。
 private const val HOME_TOP_BAR_HIDE_THRESHOLD_PX = 300
 private const val LIBRARY_TOP_BAR_HIDE_THRESHOLD_PX = 100
+private const val LIBRARY_GRID_COLUMNS = 4
+private const val LIBRARY_LIMIT = 240
+private val BOOK_POSTER_ASPECT_RATIO = 10.5f / 16f
+private val LIBRARY_POSTER_WIDTH = 132.dp
 
 enum class BookshelfScreenMode {
     Home,
     Library,
-}
-
-private enum class LibrarySortMode(val label: String) {
-    ImportedDesc("最近导入"),
-    TitleAsc("书名排序"),
-    ReadingProgress("阅读进度"),
 }
 
 @Composable
@@ -108,368 +90,30 @@ fun BookshelfScreen(
     viewModel: BookshelfScreenViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val rescanState by viewModel.rescanState.collectAsStateWithLifecycle()
 
-    when (val state = uiState) {
-        // Loading 态只渲染背景，无任何 UI 元素——Room 查询 < 10ms，此态几乎不可见。
-        // 如果直接显示 EmptyBookshelf 会在 Room 到达前闪一帧 "书库还没有书" 卡片。
-        is BookshelfUiState.Loading -> {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFF05070B)),
-            ) {
-                HomeBackground()
-            }
-        }
-        is BookshelfUiState.Ready -> {
-            if (state.allBooks.isEmpty()) {
-                EmptyBookshelf(
-                    onGoTransfer = onGoTransfer,
-                    onRefresh = viewModel::rescanLibrary,
-                    rescanState = rescanState,
-                    requestInitialFocus = requestInitialFocus,
-                )
-            } else {
-                when (mode) {
-                    BookshelfScreenMode.Home -> ReadingHome(
-                        recentBooks = state.recentBooks,
-                        allBooks = state.allBooks,
-                        onBookClick = onBookClick,
-                        onGoBookshelf = onGoBookshelf,
-                        onScroll = onScroll,
-                        isTopBarVisible = isTopBarVisible,
-                        requestInitialFocus = requestInitialFocus,
-                    )
-
-                    BookshelfScreenMode.Library -> LibraryPosterWall(
-                        allBooks = state.allBooks,
-                        rescanState = rescanState,
-                        onBookClick = onBookClick,
-                        onRefresh = viewModel::rescanLibrary,
-                        onScroll = onScroll,
-                        isTopBarVisible = isTopBarVisible,
-                        requestInitialFocus = requestInitialFocus,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReadingHome(
-    recentBooks: BookList,
-    allBooks: BookList,
-    onBookClick: (book: Book) -> Unit,
-    onGoBookshelf: () -> Unit,
-    onScroll: (isTopBarVisible: Boolean) -> Unit,
-    isTopBarVisible: Boolean,
-    requestInitialFocus: Boolean,
-) {
-    val childPadding = rememberChildPadding()
-    val continueBook = remember(recentBooks, allBooks) { recentBooks.firstOrNull() ?: allBooks.first() }
-    val recentReadingBooks = remember(recentBooks, continueBook) {
-        recentBooks.filterNot { it.id == continueBook.id }.take(RECENT_READING_LIMIT)
-    }
-    val continueRequester = remember { FocusRequester() }
-    val libraryRequester = remember { FocusRequester() }
-    val recentFirstRequester = remember { FocusRequester() }
-    val listState = rememberLazyListState()
-
-    // 复用 JetStream HomeScreen 的滚动联动：列表顶部(300px 内)显示顶栏，向下滚动后隐藏；
-    // 顶栏重新出现时把列表滚回顶部，避免内容被顶栏遮挡。
-    val shouldShowTopBar by remember {
-        derivedStateOf {
-            listState.firstVisibleItemIndex == 0 &&
-                listState.firstVisibleItemScrollOffset < HOME_TOP_BAR_HIDE_THRESHOLD_PX
-        }
-    }
-    LaunchedEffect(shouldShowTopBar) { onScroll(shouldShowTopBar) }
-    LaunchedEffect(isTopBarVisible) {
-        if (isTopBarVisible) {
-            try { listState.animateScrollToItem(0) } catch (_: Exception) {}
-        }
-    }
-    LaunchedEffect(requestInitialFocus) {
-        if (requestInitialFocus) {
-            try { continueRequester.requestFocus() } catch (_: IllegalStateException) {}
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF05070B)),
-    ) {
-        HomeBackground()
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = childPadding.start,
-                end = childPadding.end,
-                top = 34.dp,
-                bottom = 96.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(28.dp),
-        ) {
-            item {
-                ContinueReadingStage(
-                    book = continueBook,
-                    totalCount = allBooks.size,
-                    continueRequester = continueRequester,
-                    libraryRequester = libraryRequester,
-                    downRequester = if (recentReadingBooks.isNotEmpty()) recentFirstRequester else FocusRequester.Cancel,
-                    onContinue = { onBookClick(continueBook) },
-                    onGoBookshelf = onGoBookshelf,
-                )
-            }
-            if (recentReadingBooks.isNotEmpty()) {
-                item {
-                    RecentReadingRail(
-                        books = recentReadingBooks,
-                        firstItemRequester = recentFirstRequester,
-                        upRequester = continueRequester,
-                        onBookClick = onBookClick,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LibraryPosterWall(
-    allBooks: BookList,
-    rescanState: RescanState,
-    onBookClick: (book: Book) -> Unit,
-    onRefresh: () -> Unit,
-    onScroll: (isTopBarVisible: Boolean) -> Unit,
-    isTopBarVisible: Boolean,
-    requestInitialFocus: Boolean,
-) {
-    val childPadding = rememberChildPadding()
-    val refreshRequester = remember { FocusRequester() }
-    val sortFirstRequester = remember { FocusRequester() }
-    val gridRequester = remember { FocusRequester() }
-    val firstBookRequester = remember { FocusRequester() }
-    val gridState = rememberLazyGridState()
-    var sortMode by remember { mutableStateOf(LibrarySortMode.ImportedDesc) }
-    val sortedBooks = remember(allBooks, sortMode) {
-        when (sortMode) {
-            LibrarySortMode.ImportedDesc -> allBooks.sortedByDescending { it.importedAt }
-            LibrarySortMode.TitleAsc -> allBooks.sortedBy { it.title.lowercase(Locale.ROOT) }
-            LibrarySortMode.ReadingProgress -> allBooks.sortedWith(
-                compareByDescending<Book> { it.hasReadingHistory() }
-                    .thenByDescending { it.progressRatio() }
-                    .thenBy { it.title.lowercase(Locale.ROOT) },
-            )
-        }.take(LIBRARY_ROW_LIMIT)
-    }
-
-    // 滚动联动：网格顶部(100px 内)显示顶栏，向下滚动后隐藏；顶栏回归时滚回顶部。
-    val shouldShowTopBar by remember {
-        derivedStateOf {
-            gridState.firstVisibleItemIndex == 0 &&
-                gridState.firstVisibleItemScrollOffset < LIBRARY_TOP_BAR_HIDE_THRESHOLD_PX
-        }
-    }
-    LaunchedEffect(shouldShowTopBar) { onScroll(shouldShowTopBar) }
-    LaunchedEffect(isTopBarVisible) {
-        if (isTopBarVisible) {
-            try { gridState.animateScrollToItem(0) } catch (_: Exception) {}
-        }
-    }
-    // 仅「进入书库」(内层导航) 时主动把焦点推入网格：推到容器后由 focusRestorer 决定落点——
-    // 有上次记录则恢复，否则回退到首本。读书返回(外层)由 Dashboard 的 moveFocus(Down) 接管。
-    LaunchedEffect(requestInitialFocus) {
-        if (requestInitialFocus) {
-            try { gridRequester.requestFocus() } catch (_: IllegalStateException) {}
-        }
-    }
-
-    // 对齐 JetStream FavouritesScreen 结构：Column 包 header + grid，header 不塞进 grid。
-    // 去掉自定义 focusProperties / zIndex / focusRequesterIf —— TV 焦点系统默认行为已足够。
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF05070B)),
-    ) {
-        HomeBackground()
-        Column(modifier = Modifier.fillMaxSize()) {
-            LibraryHeader(
-                totalCount = allBooks.size,
-                shownCount = sortedBooks.size,
-                sortMode = sortMode,
-                rescanState = rescanState,
-                refreshRequester = refreshRequester,
-                sortFirstRequester = sortFirstRequester,
-                downRequester = firstBookRequester,
-                onSortChange = { sortMode = it },
-                onRefresh = onRefresh,
-                modifier = Modifier.padding(
-                    start = childPadding.start,
-                    end = childPadding.end,
-                    top = 34.dp,
-                    bottom = 12.dp,
-                ),
-            )
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(LIBRARY_GRID_COLUMNS),
-                state = gridState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .focusRequester(gridRequester)
-                    .focusRestorer { firstBookRequester },
-                contentPadding = PaddingValues(
-                    start = childPadding.start,
-                    end = childPadding.end,
-                    bottom = 140.dp,
-                ),
-                horizontalArrangement = Arrangement.spacedBy(18.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-            ) {
-                gridItemsIndexed(sortedBooks, key = { _, book -> book.id }) { index, book ->
-                    LibraryBookCard(
-                        book = book,
-                        modifier = Modifier
-                            .padding(horizontal = 8.dp, vertical = 8.dp)
-                            .focusRequesterIf(index == 0, firstBookRequester),
-                        onClick = { onBookClick(book) },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun HomeBackground() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF17243A),
-                        Color(0xFF0A111B),
-                        Color(0xFF05070B),
-                    ),
-                ),
-            ),
-    )
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.horizontalGradient(
-                    colors = listOf(
-                        Color.Black.copy(alpha = 0.18f),
-                        Color.Transparent,
-                        Color.Black.copy(alpha = 0.36f),
-                    ),
-                ),
-            ),
-    )
-}
-
-@Composable
-private fun ContinueReadingStage(
-    book: Book,
-    totalCount: Int,
-    continueRequester: FocusRequester,
-    libraryRequester: FocusRequester,
-    downRequester: FocusRequester,
-    onContinue: () -> Unit,
-    onGoBookshelf: () -> Unit,
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(360.dp),
-        shape = MaterialTheme.shapes.extraLarge,
-        colors = SurfaceDefaults.colors(containerColor = Color(0xFF101722)),
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                Color(0xFF080B12),
-                                Color(0xFF172744),
-                                Color(0xFF0A0D13),
-                            ),
-                        ),
-                    ),
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 42.dp, vertical = 34.dp),
-                horizontalArrangement = Arrangement.spacedBy(36.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                BookCover(
-                    book = book,
-                    modifier = Modifier
-                        .width(176.dp)
-                        .aspectRatio(POSTER_ASPECT_RATIO),
-                )
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    Text(
-                        text = "继续阅读",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Color.White.copy(alpha = 0.66f),
-                    )
-                    Text(
-                        text = book.title,
-                        style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = continueSubtitle(book, totalCount),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White.copy(alpha = 0.72f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    ReadingProgressBar(progress = book.progressRatio())
-                    Row(
-                        modifier = Modifier.focusGroup(),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    ) {
-                        DuskTvButton(
-                            text = if (book.hasReadingHistory()) "继续阅读" else "开始阅读",
-                            icon = Icons.Default.PlayArrow,
-                            modifier = Modifier
-                                .focusRequester(continueRequester)
-                                .focusProperties {
-                                    left = FocusRequester.Cancel
-                                    down = downRequester
-                                },
-                            contentDescription = null,
-                            onClick = onContinue,
+    DuskPageBackground {
+        when (val state = uiState) {
+            is BookshelfUiState.Loading -> Unit
+            is BookshelfUiState.Ready -> {
+                if (state.allBooks.isEmpty()) {
+                    EmptyBookshelf(onGoTransfer = onGoTransfer)
+                } else {
+                    when (mode) {
+                        BookshelfScreenMode.Home -> HomeBookshelf(
+                            recentBooks = state.recentBooks,
+                            allBooks = state.allBooks,
+                            onBookClick = onBookClick,
+                            onScroll = onScroll,
+                            isTopBarVisible = isTopBarVisible,
+                            requestInitialFocus = requestInitialFocus,
                         )
-                        DuskTvButton(
-                            text = "进入书库",
-                            icon = Icons.AutoMirrored.Filled.LibraryBooks,
-                            style = DuskTvButtonStyle.Secondary,
-                            modifier = Modifier
-                                .focusRequester(libraryRequester)
-                                .focusProperties {
-                                    right = FocusRequester.Cancel
-                                    down = downRequester
-                                },
-                            contentDescription = null,
-                            onClick = onGoBookshelf,
+
+                        BookshelfScreenMode.Library -> LibraryBookshelf(
+                            allBooks = state.allBooks,
+                            onBookClick = onBookClick,
+                            onScroll = onScroll,
+                            isTopBarVisible = isTopBarVisible,
+                            requestInitialFocus = requestInitialFocus,
                         )
                     }
                 }
@@ -479,249 +123,329 @@ private fun ContinueReadingStage(
 }
 
 @Composable
+private fun HomeBookshelf(
+    recentBooks: BookList,
+    allBooks: BookList,
+    onBookClick: (book: Book) -> Unit,
+    onScroll: (isTopBarVisible: Boolean) -> Unit,
+    isTopBarVisible: Boolean,
+    requestInitialFocus: Boolean,
+) {
+    val childPadding = rememberChildPadding()
+    val listState = rememberLazyListState()
+    val startRequester = remember { FocusRequester() }
+    val featuredBook = remember(recentBooks, allBooks) { recentBooks.firstOrNull() ?: allBooks.first() }
+    val hasRecentBook = remember(recentBooks) { recentBooks.isNotEmpty() }
+
+    val shouldShowTopBar by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex == 0 &&
+                listState.firstVisibleItemScrollOffset < HOME_TOP_BAR_HIDE_THRESHOLD_PX
+        }
+    }
+    LaunchedEffect(shouldShowTopBar) { onScroll(shouldShowTopBar) }
+    LaunchedEffect(isTopBarVisible) {
+        if (isTopBarVisible) listState.animateScrollToItem(0)
+    }
+    LaunchedEffect(requestInitialFocus) {
+        if (requestInitialFocus) startRequester.requestFocus()
+    }
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = childPadding.start,
+            end = childPadding.end,
+            top = 34.dp,
+            bottom = 108.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
+    ) {
+        item {
+            ContinueReadingHero(
+                book = featuredBook,
+                totalCount = allBooks.size,
+                hasRecentBook = hasRecentBook,
+                startRequester = startRequester,
+                onBookClick = { onBookClick(featuredBook) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun LibraryBookshelf(
+    allBooks: BookList,
+    onBookClick: (book: Book) -> Unit,
+    onScroll: (isTopBarVisible: Boolean) -> Unit,
+    isTopBarVisible: Boolean,
+    requestInitialFocus: Boolean,
+) {
+    val childPadding = rememberChildPadding()
+    val gridState = rememberLazyGridState()
+    val firstBookRequester = remember { FocusRequester() }
+    var gridHasFocus by remember { mutableStateOf(false) }
+    val sortedBooks = remember(allBooks) {
+        allBooks.sortedByDescending { it.importedAt }.take(LIBRARY_LIMIT)
+    }
+
+    val shouldShowTopBar by remember {
+        derivedStateOf {
+            gridState.firstVisibleItemIndex == 0 &&
+                gridState.firstVisibleItemScrollOffset < LIBRARY_TOP_BAR_HIDE_THRESHOLD_PX
+        }
+    }
+    LaunchedEffect(shouldShowTopBar, gridHasFocus) {
+        onScroll(shouldShowTopBar && !gridHasFocus)
+    }
+    LaunchedEffect(requestInitialFocus) {
+        if (requestInitialFocus) firstBookRequester.requestFocus()
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        LibraryHeader(
+            totalCount = allBooks.size,
+            shownCount = sortedBooks.size,
+            modifier = Modifier.padding(
+                start = childPadding.start,
+                end = childPadding.end,
+                top = 8.dp,
+                bottom = 8.dp,
+            ),
+        )
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(LIBRARY_GRID_COLUMNS),
+            state = gridState,
+            modifier = Modifier
+                .fillMaxSize()
+                .onFocusChanged { gridHasFocus = it.hasFocus }
+                .focusRestorer { firstBookRequester },
+            contentPadding = PaddingValues(
+                start = childPadding.start,
+                top = 10.dp,
+                end = childPadding.end,
+                bottom = 132.dp,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            gridItemsIndexed(sortedBooks, key = { _, book -> book.id }) { index, book ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    LibraryBookTile(
+                        book = book,
+                        modifier = Modifier
+                            .width(LIBRARY_POSTER_WIDTH)
+                            .focusRequesterIf(index == 0, firstBookRequester)
+                            .focusProperties {
+                                if (index % LIBRARY_GRID_COLUMNS == 0) {
+                                    left = FocusRequester.Cancel
+                                }
+                            },
+                        onClick = { onBookClick(book) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContinueReadingHero(
+    book: Book,
+    totalCount: Int,
+    hasRecentBook: Boolean,
+    startRequester: FocusRequester,
+    onBookClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(34.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BookCover(
+            book = book,
+            modifier = Modifier
+                .width(210.dp)
+                .aspectRatio(BOOK_POSTER_ASPECT_RATIO),
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(
+                text = if (hasRecentBook) "最近阅读" else "开始第一本书",
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White.copy(alpha = 0.58f),
+            )
+            Text(
+                text = book.title,
+                style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Bold),
+                color = Color.White,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = continueSubtitle(book, totalCount),
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White.copy(alpha = 0.72f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            ReadingProgressBar(
+                progress = if (book.hasReadingHistory()) book.progressRatio() else 0f,
+                modifier = Modifier.widthIn(min = 360.dp, max = 560.dp),
+            )
+            Row(modifier = Modifier.focusGroup()) {
+                DuskTvButton(
+                    text = if (book.hasReadingHistory()) "继续阅读" else "开始阅读",
+                    icon = Icons.Outlined.AutoStories,
+                    modifier = Modifier.focusRequester(startRequester),
+                    onClick = onBookClick,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun LibraryHeader(
     totalCount: Int,
     shownCount: Int,
-    sortMode: LibrarySortMode,
-    rescanState: RescanState,
-    refreshRequester: FocusRequester,
-    sortFirstRequester: FocusRequester,
-    downRequester: FocusRequester,
-    onSortChange: (LibrarySortMode) -> Unit,
-    onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .focusGroup(),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            SectionHeader(
-                title = "全部书库",
-                subtitle = "共 $totalCount 本 · 当前显示 $shownCount 本 · ${rescanState.label()}",
-                modifier = Modifier.weight(1f),
-            )
-            DuskTvButton(
-                text = if (rescanState is RescanState.Scanning) "扫描中…" else "刷新书库",
-                icon = Icons.Default.Refresh,
-                style = DuskTvButtonStyle.Secondary,
-                modifier = Modifier
-                    .focusRequester(refreshRequester)
-                    .focusProperties {
-                        right = FocusRequester.Cancel
-                        down = downRequester
-                    },
-                contentDescription = null,
-                onClick = onRefresh,
-            )
-        }
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "排序",
-                style = MaterialTheme.typography.labelLarge,
-                color = Color.White.copy(alpha = 0.62f),
-            )
-            LibrarySortMode.entries.forEachIndexed { index, mode ->
-                SortChip(
-                    label = mode.label,
-                    selected = sortMode == mode,
-                    modifier = Modifier
-                        .then(if (index == 0) Modifier.focusRequester(sortFirstRequester) else Modifier)
-                        .focusProperties {
-                            up = FocusRequester.Cancel
-                            if (index == 0) left = FocusRequester.Cancel
-                            if (index == LibrarySortMode.entries.lastIndex) right = refreshRequester
-                            down = downRequester
-                        },
-                    onClick = { onSortChange(mode) },
-                )
-            }
-        }
+    val summary = if (totalCount == shownCount) {
+        "共 $totalCount 本 · 最近导入"
+    } else {
+        "共 $totalCount 本 · 显示 $shownCount 本 · 最近导入"
     }
+    Text(
+        text = summary,
+        modifier = modifier.fillMaxWidth(),
+        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+        color = Color.White.copy(alpha = 0.58f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Composable
-private fun SortChip(
-    label: String,
-    selected: Boolean,
+private fun LibraryBookTile(
+    book: Book,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    var focused by remember { mutableStateOf(false) }
+    val contentColor = if (focused) Color.Black else Color.White
     Surface(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier
+            .width(LIBRARY_POSTER_WIDTH)
+            .onFocusChanged { focused = it.hasFocus },
         shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.large),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (selected) Color.White.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.07f),
+            containerColor = Color.White.copy(alpha = 0.045f),
             focusedContainerColor = Color.White,
-            contentColor = Color.White,
-            focusedContentColor = Color.Black,
         ),
         border = ClickableSurfaceDefaults.border(
-            border = if (selected) {
-                Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.5f)), shape = MaterialTheme.shapes.large)
-            } else {
-                Border.None
-            },
-            focusedBorder = Border(border = BorderStroke(2.dp, Color.White), shape = MaterialTheme.shapes.large),
-        ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-        )
-    }
-}
-
-@Composable
-private fun LibraryBookCard(
-    book: Book,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    var isFocused by remember { mutableStateOf(false) }
-
-    // 对齐 JetStream MovieCard：focusedScale=1.0（不缩放）+ 无 Glow + 无 zIndex。
-    // 焦点只通过白色边框指示，避免缩放/光效触发整张卡片重绘导致滚动卡顿。
-    // onFocusChanged 是轻量回调（不触发布局/绘制），仅用于标题白色背景切换。
-    Surface(
-        onClick = onClick,
-        modifier = modifier.onFocusChanged { isFocused = it.hasFocus },
-        shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.medium),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.Transparent,
-            focusedContainerColor = Color.Transparent,
-        ),
-        border = ClickableSurfaceDefaults.border(
+            border = Border(
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+                shape = MaterialTheme.shapes.large,
+            ),
             focusedBorder = Border(
-                border = BorderStroke(2.dp, Color.White),
-                shape = MaterialTheme.shapes.medium,
+                border = BorderStroke(3.dp, Color.White),
+                shape = MaterialTheme.shapes.large,
             ),
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            BookCover(
-                book = book,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(POSTER_ASPECT_RATIO),
-            )
-            // 标题：选中时白色背景满宽 + 黑字 + 跑马灯
-            Text(
-                text = book.title,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        color = if (isFocused) Color.White else Color.Transparent,
-                        shape = MaterialTheme.shapes.small,
-                    )
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                    .then(if (isFocused) Modifier.basicMarquee() else Modifier),
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = if (isFocused) Color.Black else Color.White.copy(alpha = 0.82f),
-                maxLines = 1,
-                overflow = if (isFocused) TextOverflow.Clip else TextOverflow.Ellipsis,
-            )
-            if (book.hasReadingHistory()) {
-                ReadingProgressBar(progress = book.progressRatio())
-            }
-        }
-    }
-}
-
-@Composable
-private fun RecentReadingRail(
-    books: BookList,
-    firstItemRequester: FocusRequester,
-    upRequester: FocusRequester,
-    onBookClick: (book: Book) -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .focusGroup(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        SectionHeader(
-            title = "最近阅读",
-            subtitle = "只保留最近打开的书, 方便快速切换",
-        )
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(18.dp),
-            contentPadding = PaddingValues(top = 12.dp, bottom = 12.dp, end = 24.dp),
-            modifier = Modifier.focusRestorer(),
+        Column(
+            modifier = Modifier.padding(7.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            itemsIndexed(books, key = { _, book -> book.id }) { index, book ->
-                PosterTile(
-                    book = book,
-                    modifier = Modifier
-                        .width(RAIL_CARD_WIDTH)
-                        .padding(horizontal = 4.dp, vertical = 6.dp)
-                        .focusRequesterIf(index == 0, firstItemRequester)
-                        .focusProperties {
-                            up = upRequester
-                            down = FocusRequester.Cancel
-                            if (index == 0) left = FocusRequester.Cancel
-                            if (index == books.lastIndex) right = FocusRequester.Cancel
-                        },
-                    onClick = { onBookClick(book) },
-                )
-            }
+            BookCover(
+                book = book,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(BOOK_POSTER_ASPECT_RATIO),
+            )
+            Text(
+                text = book.title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (focused) Modifier.basicMarquee() else Modifier),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = contentColor.copy(alpha = if (focused) 1f else 0.86f),
+                maxLines = 1,
+                overflow = if (focused) TextOverflow.Clip else TextOverflow.Ellipsis,
+            )
+            ReadingProgressBar(
+                progress = if (book.hasReadingHistory()) book.progressRatio() else 0f,
+                trackColor = contentColor.copy(alpha = if (focused) 0.16f else 0.14f),
+                progressColor = contentColor.copy(alpha = if (book.hasReadingHistory()) 0.82f else 0.24f),
+            )
         }
     }
 }
 
 @Composable
-private fun PosterTile(
-    book: Book,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
+private fun EmptyBookshelf(
+    onGoTransfer: () -> Unit,
 ) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier,
-        shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.medium),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.Transparent,
-            focusedContainerColor = Color.Transparent,
-        ),
-        border = ClickableSurfaceDefaults.border(
-            focusedBorder = Border(border = BorderStroke(2.dp, Color.White), shape = MaterialTheme.shapes.medium),
-        ),
-        glow = ClickableSurfaceDefaults.glow(
-            focusedGlow = Glow(elevation = 14.dp, elevationColor = Color.White.copy(alpha = 0.18f)),
-        ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
+    val childPadding = rememberChildPadding()
+    val transferRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { transferRequester.requestFocus() }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = childPadding.start, vertical = 44.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            BookCover(
-                book = book,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(POSTER_ASPECT_RATIO),
-            )
-            Text(
-                text = book.title,
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (book.hasReadingHistory()) {
-                ReadingProgressBar(progress = book.progressRatio())
+        Surface(
+            colors = SurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.08f)),
+            shape = MaterialTheme.shapes.extraLarge,
+            border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)), shape = MaterialTheme.shapes.extraLarge),
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 44.dp, vertical = 38.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Surface(
+                    modifier = Modifier.size(58.dp),
+                    colors = SurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.12f)),
+                    shape = MaterialTheme.shapes.large,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(text = "书", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                    }
+                }
+                Text(
+                    text = "书库还没有书",
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = Color.White,
+                )
+                Text(
+                    text = "通过无线传书导入 TXT / EPUB, 本地目录扫描可在设置页执行.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.68f),
+                )
+                Row(
+                    modifier = Modifier.focusGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    DuskTvButton(
+                        text = "去传书",
+                        modifier = Modifier.focusRequester(transferRequester),
+                        onClick = onGoTransfer,
+                    )
+                }
             }
         }
     }
@@ -731,18 +455,20 @@ private fun PosterTile(
 private fun ReadingProgressBar(
     progress: Float,
     modifier: Modifier = Modifier,
+    trackColor: Color = Color.White.copy(alpha = 0.14f),
+    progressColor: Color = Color.White.copy(alpha = 0.82f),
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(4.dp)
-            .background(Color.White.copy(alpha = 0.14f), MaterialTheme.shapes.small),
+            .background(trackColor, MaterialTheme.shapes.small),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth(progress.coerceIn(0.02f, 1f))
                 .height(4.dp)
-                .background(Color.White.copy(alpha = 0.86f), MaterialTheme.shapes.small),
+                .background(progressColor, MaterialTheme.shapes.small),
         )
     }
 }
@@ -751,92 +477,60 @@ private fun ReadingProgressBar(
 private fun SectionHeader(
     title: String,
     subtitle: String,
-    modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             text = title,
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = Color.White,
         )
         Text(
             text = subtitle,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+            color = Color.White.copy(alpha = 0.58f),
         )
     }
 }
 
-private fun RescanState.label(): String = when (this) {
-    RescanState.Idle -> "可重新扫描 Documents/暮阅"
-    RescanState.Scanning -> "正在扫描…"
-    is RescanState.Done -> if (imported > 0) "刚刚新增 $imported 本" else "刚刚扫描完成, 无新增"
-    is RescanState.Failure -> "扫描失败: $message"
+@Composable
+private fun DuskPageBackground(content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF070D15)),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(Color(0xFF17263A).copy(alpha = 0.52f), Color.Transparent),
+                        radius = 980f,
+                    ),
+                ),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color(0xFF0B1420), Color(0xFF08111B), Color(0xFF070D15)),
+                    ),
+                ),
+        )
+        content()
+    }
 }
+
 
 private fun continueSubtitle(book: Book, totalCount: Int): String {
+    val author = book.author?.takeIf { it.isNotBlank() } ?: "未知作者"
     val progress = if (book.hasReadingHistory()) {
-        "已读 ${String.format(Locale.ROOT, "%.0f%%", book.progressRatio() * 100)}"
+        "已读 ${(book.progressRatio() * 100).coerceIn(0f, 100f).toInt()}%"
     } else {
-        "未开始"
+        "尚未开始"
     }
-    val author = book.author?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
-    return "$progress$author · 书库共 $totalCount 本"
-}
-
-@Composable
-private fun EmptyBookshelf(
-    onGoTransfer: () -> Unit,
-    onRefresh: () -> Unit,
-    rescanState: RescanState,
-    requestInitialFocus: Boolean = false,
-) {
-    val transferRequester = remember { FocusRequester() }
-    LaunchedEffect(requestInitialFocus) {
-        if (requestInitialFocus) transferRequester.requestFocus()
-    }
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Surface(
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = SurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.07f)),
-        ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 44.dp, vertical = 36.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                Text(
-                    text = "书库还没有书",
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                )
-                Text(
-                    text = "通过传书上传 TXT / EPUB, 或把文件放进 Documents/暮阅 后刷新。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    DuskTvButton(
-                        text = "前往传书",
-                        modifier = Modifier.focusRequester(transferRequester),
-                        onClick = onGoTransfer,
-                    )
-                    DuskTvButton(
-                        text = if (rescanState is RescanState.Scanning) "扫描中…" else "刷新书库",
-                        icon = Icons.Default.Refresh,
-                        style = DuskTvButtonStyle.Secondary,
-                        contentDescription = null,
-                        onClick = onRefresh,
-                    )
-                }
-            }
-        }
-    }
+    return "$author · $progress · 书库 $totalCount 本"
 }
 
 private fun Modifier.focusRequesterIf(condition: Boolean, requester: FocusRequester): Modifier {

@@ -1,7 +1,9 @@
 package com.wzl.duskreader.tv.presentation.screens.bookDetails
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,8 +15,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -26,17 +30,21 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.tv.material3.Border
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Surface
+import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import com.wzl.duskreader.tv.data.entities.Book
 import com.wzl.duskreader.tv.data.entities.hasReadingHistory
 import com.wzl.duskreader.tv.data.entities.progressRatio
 import com.wzl.duskreader.tv.presentation.common.BookCover
 import com.wzl.duskreader.tv.presentation.common.DuskTvButton
+import com.wzl.duskreader.tv.presentation.common.DuskTvButtonStyle
 import com.wzl.duskreader.tv.presentation.common.Error
 import com.wzl.duskreader.tv.presentation.common.Loading
 import com.wzl.duskreader.tv.presentation.screens.dashboard.rememberChildPadding
@@ -54,17 +62,15 @@ fun BookDetailsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    when (val s = uiState) {
+    when (val state = uiState) {
         is BookDetailsScreenUiState.Loading -> Loading(modifier = Modifier.fillMaxSize())
         is BookDetailsScreenUiState.Error -> Error(modifier = Modifier.fillMaxSize())
-        is BookDetailsScreenUiState.Done -> {
-            Details(
-                book = s.book,
-                onBackPressed = onBackPressed,
-                onStartReading = { onStartReading(s.book) },
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
+        is BookDetailsScreenUiState.Done -> Details(
+            book = state.book,
+            onBackPressed = onBackPressed,
+            onStartReading = { onStartReading(state.book) },
+            modifier = Modifier.fillMaxSize(),
+        )
     }
 }
 
@@ -79,48 +85,10 @@ private fun Details(
     val childPadding = rememberChildPadding()
     val startButtonFocus = remember { FocusRequester() }
 
-    LaunchedEffect(Unit) {
-        startButtonFocus.requestFocus()
-    }
+    LaunchedEffect(Unit) { startButtonFocus.requestFocus() }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.horizontalGradient(
-                        0f to Color(0xFF0A0D13),
-                        0.5f to Color(0xFF121926),
-                        1f to Color(0xFF07090E),
-                    ),
-                ),
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.82f),
-                            Color.Black.copy(alpha = 0.56f),
-                            Color.Transparent,
-                        ),
-                    ),
-                ),
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.12f),
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.66f),
-                        ),
-                    ),
-                ),
-        )
+    Box(modifier = modifier.fillMaxSize().background(Color(0xFF05070B))) {
+        DetailsBackground()
         Row(
             modifier = Modifier
                 .fillMaxSize()
@@ -128,94 +96,146 @@ private fun Details(
                     start = childPadding.start,
                     end = childPadding.end,
                     top = 48.dp,
-                    bottom = childPadding.bottom,
+                    bottom = 48.dp,
                 ),
-            horizontalArrangement = Arrangement.spacedBy(36.dp),
+            horizontalArrangement = Arrangement.spacedBy(38.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BookCover(
-                book = book,
-                modifier = Modifier
-                    .width(260.dp)
-                    .aspectRatio(10.5f / 16f),
-            )
+            Surface(
+                colors = SurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.06f)),
+                shape = MaterialTheme.shapes.extraLarge,
+                border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)), shape = MaterialTheme.shapes.extraLarge),
+            ) {
+                BookCover(
+                    book = book,
+                    modifier = Modifier
+                        .padding(14.dp)
+                        .width(248.dp)
+                        .aspectRatio(10.5f / 16f),
+                )
+            }
 
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
+                Text(
+                    text = book.format.uppercase(Locale.ROOT),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White.copy(alpha = 0.54f),
+                )
                 Text(
                     text = book.title,
                     style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
                     color = Color.White,
                     maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                if (!book.author.isNullOrBlank()) {
-                    Text(
-                        text = book.author,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White.copy(alpha = 0.76f),
-                    )
-                }
+                Text(
+                    text = book.author?.takeIf { it.isNotBlank() } ?: "未知作者",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White.copy(alpha = 0.72f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 MetaRow(book = book)
-                if (!book.description.isNullOrBlank()) {
-                    Text(
-                        text = book.description,
-                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp),
-                        color = Color.White.copy(alpha = 0.82f),
-                        maxLines = 5,
+                DescriptionPanel(book = book)
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.focusGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    DuskTvButton(
+                        text = if (book.hasReadingHistory()) "继续阅读" else "开始阅读",
+                        icon = Icons.AutoMirrored.Outlined.MenuBook,
+                        modifier = Modifier.focusRequester(startButtonFocus),
+                        onClick = onStartReading,
+                    )
+                    DuskTvButton(
+                        text = "返回",
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        style = DuskTvButtonStyle.Secondary,
+                        onClick = onBackPressed,
                     )
                 }
-                Spacer(Modifier.height(8.dp))
-                StartReadingButton(
-                    modifier = Modifier.focusRequester(startButtonFocus),
-                    hasProgress = book.hasReadingHistory(),
-                    onClick = onStartReading,
-                )
             }
         }
     }
 }
 
 @Composable
-private fun MetaRow(book: Book) {
-    Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-        MetaItem(label = "格式", value = book.format.uppercase(Locale.ROOT))
-        MetaItem(label = "大小", value = formatFileSize(book.fileSize))
-        progressPercent(book)?.let { MetaItem(label = "进度", value = it) }
-        MetaItem(label = "导入", value = "本地书库")
-    }
-}
-
-@Composable
-private fun MetaItem(label: String, value: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = Color.White.copy(alpha = 0.52f),
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = Color.White,
-        )
-    }
-}
-
-@Composable
-private fun StartReadingButton(
-    modifier: Modifier = Modifier,
-    hasProgress: Boolean,
-    onClick: () -> Unit,
-) {
-    DuskTvButton(
-        text = if (hasProgress) "继续阅读" else "开始阅读",
-        icon = Icons.AutoMirrored.Outlined.MenuBook,
-        modifier = modifier,
-        contentDescription = null,
-        onClick = onClick,
+private fun DetailsBackground() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.horizontalGradient(
+                    colors = listOf(Color(0xFF0A0D13), Color(0xFF121B2D), Color(0xFF05070B)),
+                ),
+            ),
     )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color.Black.copy(alpha = 0.10f), Color.Transparent, Color.Black.copy(alpha = 0.58f)),
+                ),
+            ),
+    )
+}
+
+@Composable
+private fun DescriptionPanel(book: Book) {
+    Surface(
+        modifier = Modifier.widthIn(max = 780.dp),
+        colors = SurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.07f)),
+        shape = MaterialTheme.shapes.large,
+        border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)), shape = MaterialTheme.shapes.large),
+    ) {
+        Text(
+            text = book.description?.takeIf { it.isNotBlank() } ?: "这本书还没有简介. 打开后会自动记录阅读进度.",
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color.White.copy(alpha = 0.74f),
+            maxLines = 5,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun MetaRow(book: Book) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        MetaChip(label = "大小", value = formatFileSize(book.fileSize))
+        MetaChip(label = "进度", value = progressPercent(book) ?: "未开始")
+        MetaChip(label = "来源", value = "本地书库")
+    }
+}
+
+@Composable
+private fun MetaChip(label: String, value: String) {
+    Surface(
+        colors = SurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.08f)),
+        shape = MaterialTheme.shapes.large,
+        border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)), shape = MaterialTheme.shapes.large),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White.copy(alpha = 0.48f),
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = Color.White,
+            )
+        }
+    }
 }
 
 private fun formatFileSize(bytes: Long): String {
