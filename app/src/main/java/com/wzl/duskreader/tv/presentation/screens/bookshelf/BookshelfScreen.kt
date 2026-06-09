@@ -60,6 +60,10 @@ import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import com.wzl.duskreader.tv.data.entities.Book
 import com.wzl.duskreader.tv.data.entities.BookList
+import com.wzl.duskreader.tv.data.entities.BookKind
+import com.wzl.duskreader.tv.data.entities.hasGeneratedCover
+import com.wzl.duskreader.tv.data.entities.hasOpenDataCover
+import com.wzl.duskreader.tv.data.entities.kind
 import com.wzl.duskreader.tv.data.entities.hasReadingHistory
 import com.wzl.duskreader.tv.data.entities.progressRatio
 import com.wzl.duskreader.tv.presentation.common.BookCover
@@ -68,10 +72,9 @@ import com.wzl.duskreader.tv.presentation.screens.dashboard.rememberChildPadding
 
 private const val HOME_TOP_BAR_HIDE_THRESHOLD_PX = 300
 private const val LIBRARY_TOP_BAR_HIDE_THRESHOLD_PX = 100
-private const val LIBRARY_GRID_COLUMNS = 4
+private const val LIBRARY_GRID_COLUMNS = 5
 private const val LIBRARY_LIMIT = 240
-private val BOOK_POSTER_ASPECT_RATIO = 10.5f / 16f
-private val LIBRARY_POSTER_WIDTH = 132.dp
+private val BOOK_POSTER_ASPECT_RATIO = 3f / 4f
 
 enum class BookshelfScreenMode {
     Home,
@@ -205,7 +208,7 @@ private fun LibraryBookshelf(
 
     Column(modifier = Modifier.fillMaxSize()) {
         LibraryHeader(
-            totalCount = allBooks.size,
+            books = allBooks,
             shownCount = sortedBooks.size,
             modifier = Modifier.padding(
                 start = childPadding.start,
@@ -227,20 +230,20 @@ private fun LibraryBookshelf(
                 end = childPadding.end,
                 bottom = 132.dp,
             ),
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             gridItemsIndexed(sortedBooks, key = { _, book -> book.id }) { index, book ->
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
                     contentAlignment = Alignment.TopCenter,
                 ) {
                     LibraryBookTile(
                         book = book,
                         modifier = Modifier
-                            .width(LIBRARY_POSTER_WIDTH)
+                            .fillMaxWidth()
                             .focusRequesterIf(index == 0, firstBookRequester)
                             .focusProperties {
                                 if (index % LIBRARY_GRID_COLUMNS == 0) {
@@ -268,7 +271,7 @@ private fun ContinueReadingHero(
         horizontalArrangement = Arrangement.spacedBy(34.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        BookCover(
+        BookCoverWithBadges(
             book = book,
             modifier = Modifier
                 .width(210.dp)
@@ -290,6 +293,7 @@ private fun ContinueReadingHero(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            BookMetaChips(book = book)
             Text(
                 text = continueSubtitle(book, totalCount),
                 style = MaterialTheme.typography.titleMedium,
@@ -315,15 +319,17 @@ private fun ContinueReadingHero(
 
 @Composable
 private fun LibraryHeader(
-    totalCount: Int,
+    books: BookList,
     shownCount: Int,
     modifier: Modifier = Modifier,
 ) {
-    val summary = if (totalCount == shownCount) {
-        "共 $totalCount 本 · 最近导入"
-    } else {
-        "共 $totalCount 本 · 显示 $shownCount 本 · 最近导入"
-    }
+    val totalCount = books.size
+    val txtCount = books.count { it.kind() == BookKind.Novel }
+    val epubCount = books.count { it.kind() == BookKind.Epub }
+    val openCoverCount = books.count { it.hasOpenDataCover() }
+    val generatedCoverCount = books.count { it.hasGeneratedCover() }
+    val shownText = if (totalCount == shownCount) "最近导入" else "显示 $shownCount 本 · 最近导入"
+    val summary = "共 $totalCount 本 · TXT $txtCount · EPUB $epubCount · 开放源 $openCoverCount · 生成 $generatedCoverCount · $shownText"
     Text(
         text = summary,
         modifier = modifier.fillMaxWidth(),
@@ -345,7 +351,6 @@ private fun LibraryBookTile(
     Surface(
         onClick = onClick,
         modifier = modifier
-            .width(LIBRARY_POSTER_WIDTH)
             .onFocusChanged { focused = it.hasFocus },
         shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.large),
         colors = ClickableSurfaceDefaults.colors(
@@ -365,10 +370,10 @@ private fun LibraryBookTile(
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
     ) {
         Column(
-            modifier = Modifier.padding(7.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(6.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
         ) {
-            BookCover(
+            BookCoverWithBadges(
                 book = book,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -390,6 +395,70 @@ private fun LibraryBookTile(
                 progressColor = contentColor.copy(alpha = if (book.hasReadingHistory()) 0.82f else 0.24f),
             )
         }
+    }
+}
+
+
+@Composable
+private fun BookCoverWithBadges(
+    book: Book,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        BookCover(
+            book = book,
+            modifier = Modifier.fillMaxSize(),
+        )
+        BookKindChip(
+            book = book,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(8.dp),
+        )
+    }
+}
+
+
+@Composable
+private fun BookKindChip(
+    book: Book,
+    modifier: Modifier = Modifier,
+) {
+    BookStatusChip(
+        text = book.kind().label,
+        color = if (book.kind() == BookKind.Epub) Color(0xFF7DD3FC) else Color(0xFFFBBF24),
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun BookMetaChips(
+    book: Book,
+    modifier: Modifier = Modifier,
+) {
+    BookKindChip(book = book, modifier = modifier)
+}
+
+@Composable
+private fun BookStatusChip(
+    text: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        colors = SurfaceDefaults.colors(containerColor = Color.Black.copy(alpha = 0.68f)),
+        shape = MaterialTheme.shapes.small,
+        border = Border(BorderStroke(1.dp, color.copy(alpha = 0.72f)), shape = MaterialTheme.shapes.small),
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

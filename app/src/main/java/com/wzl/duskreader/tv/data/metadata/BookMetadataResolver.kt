@@ -1,11 +1,9 @@
 package com.wzl.duskreader.tv.data.metadata
 
-import android.content.Context
-import dagger.hilt.android.qualifiers.ApplicationContext
+import com.wzl.duskreader.tv.data.entities.BookKind
+import com.wzl.duskreader.tv.data.entities.CoverSource
 import java.io.File
-import java.io.InputStream
 import java.net.URLDecoder
-import java.security.MessageDigest
 import java.util.Locale
 import java.util.zip.ZipFile
 import javax.inject.Inject
@@ -15,19 +13,50 @@ import org.w3c.dom.Element
 
 @Singleton
 class BookMetadataResolver @Inject constructor(
-    @ApplicationContext private val context: Context,
+    private val coverCache: BookCoverCache,
+    private val openLibraryCoverResolver: OpenLibraryCoverResolver,
+    private val generatedCoverFactory: GeneratedCoverFactory,
 ) {
-    fun resolve(file: File): ResolvedBookMetadata {
-        val localCover = findLocalCover(file)?.let { copyCover(file, it.extension, it.inputStream()) }
+    fun resolve(file: File, allowNetworkCover: Boolean = true): ResolvedBookMetadata {
+        val localCover = findLocalCover(file)?.let { coverFile ->
+            coverFile.inputStream().use { input -> coverCache.save(file, coverFile.extension, input) }
+        }
         val textMetadata = if (file.extension.equals("txt", ignoreCase = true)) extractTextMetadata(file) else ResolvedBookMetadata()
         val epubMetadata = if (file.extension.equals("epub", ignoreCase = true)) extractEpubMetadata(file) else ResolvedBookMetadata()
+        val titleForLookup = epubMetadata.title ?: textMetadata.title ?: file.nameWithoutExtension
+        val authorForLookup = epubMetadata.author ?: textMetadata.author
+        val openDataMetadata = if (allowNetworkCover && localCover == null && epubMetadata.coverPath == null) {
+            openLibraryCoverResolver.resolve(file, titleForLookup, authorForLookup)
+        } else {
+            null
+        }
+        val generatedCoverPath = if (localCover == null && epubMetadata.coverPath == null && openDataMetadata?.coverPath == null) {
+            generatedCoverFactory.generate(file, titleForLookup, authorForLookup, file.extension.uppercase(Locale.ROOT))
+        } else {
+            null
+        }
 
+        val coverPath = localCover ?: epubMetadata.coverPath ?: openDataMetadata?.coverPath ?: generatedCoverPath
         return ResolvedBookMetadata(
-            title = epubMetadata.title ?: textMetadata.title,
-            author = epubMetadata.author ?: textMetadata.author,
-            description = epubMetadata.description ?: textMetadata.description,
-            coverPath = localCover ?: epubMetadata.coverPath,
-            tags = epubMetadata.tags.ifEmpty { textMetadata.tags },
+            title = epubMetadata.title ?: textMetadata.title ?: openDataMetadata?.title,
+            author = epubMetadata.author ?: textMetadata.author ?: openDataMetadata?.author,
+            description = epubMetadata.description ?: textMetadata.description ?: openDataMetadata?.description,
+            coverPath = coverPath,
+            coverSource = when {
+                coverPath == null -> CoverSource.None
+                localCover != null -> CoverSource.LocalFile
+                epubMetadata.coverPath != null -> CoverSource.EpubEmbedded
+                openDataMetadata?.coverPath != null -> CoverSource.OpenData
+                generatedCoverPath != null -> CoverSource.Generated
+                else -> CoverSource.Unknown
+            },
+            bookKind = when {
+                file.extension.equals("epub", ignoreCase = true) -> BookKind.Epub
+                file.extension.equals("txt", ignoreCase = true) -> BookKind.Novel
+                else -> BookKind.Unknown
+            },
+            tags = epubMetadata.tags.ifEmpty { textMetadata.tags.ifEmpty { openDataMetadata?.tags.orEmpty() } },
+            detailPageUrl = openDataMetadata?.detailPageUrl,
         )
     }
 
@@ -46,10 +75,18 @@ class BookMetadataResolver @Inject constructor(
         val title = TEXT_TITLE_REGEX.find(head)?.groupValues?.getOrNull(1)?.cleanText()
         val author = TEXT_AUTHOR_REGEX.find(head)?.groupValues?.getOrNull(1)?.cleanText()
         val description = TEXT_DESCRIPTION_REGEX.find(head)?.groupValues?.getOrNull(1)?.cleanText()
+        val tags = TEXT_TAGS_REGEX.find(head)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.split(',', '，', ';', '；', '、')
+            ?.mapNotNull { it.cleanText().takeIf(String::isNotBlank) }
+            .orEmpty()
         return ResolvedBookMetadata(
             title = title?.takeIf { it.isNotBlank() },
             author = author?.takeIf { it.isNotBlank() },
             description = description?.takeIf { it.isNotBlank() },
+            bookKind = BookKind.Novel,
+            tags = tags,
         )
     }
 
@@ -64,13 +101,15 @@ class BookMetadataResolver @Inject constructor(
                 val coverPath = coverEntryName?.let { entryName ->
                     val entry = zip.getEntry(entryName) ?: return@let null
                     val extension = entryName.substringAfterLast('.', missingDelimiterValue = "jpg")
-                    zip.getInputStream(entry).use { input -> copyCover(file, extension, input) }
+                    zip.getInputStream(entry).use { input -> coverCache.save(file, extension, input) }
                 }
                 ResolvedBookMetadata(
                     title = xml.firstText("dc:title", "title")?.cleanText(),
                     author = xml.firstText("dc:creator", "creator")?.cleanText(),
                     description = xml.firstText("dc:description", "description")?.cleanText(),
                     coverPath = coverPath,
+                    coverSource = if (coverPath != null) CoverSource.EpubEmbedded else CoverSource.None,
+                    bookKind = BookKind.Epub,
                 )
             }
         }.getOrDefault(ResolvedBookMetadata())
@@ -119,21 +158,6 @@ class BookMetadataResolver @Inject constructor(
             .firstOrNull { it.isFile && it.length() > 0 }
     }
 
-    private fun copyCover(bookFile: File, extension: String, input: InputStream): String? {
-        val normalizedExtension = extension.lowercase(Locale.ROOT).substringBefore('?').let { ext ->
-            when (ext) {
-                "jpg", "jpeg", "png", "webp" -> ext
-                else -> "jpg"
-            }
-        }
-        val coverDir = File(context.filesDir, COVER_DIR_NAME).also { it.mkdirs() }
-        val outputFile = File(coverDir, "${bookFile.stableHash()}.$normalizedExtension")
-        return runCatching {
-            outputFile.outputStream().buffered().use { output -> input.copyTo(output) }
-            outputFile.absolutePath
-        }.getOrNull()
-    }
-
     private fun parseXml(bytes: ByteArray) = DocumentBuilderFactory.newInstance().apply {
         isNamespaceAware = true
         safeSetFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
@@ -157,12 +181,6 @@ class BookMetadataResolver @Inject constructor(
             }
         }
         return parts.joinToString("/")
-    }
-
-    private fun File.stableHash(): String {
-        val raw = "$absolutePath|${length()}|${lastModified()}"
-        val digest = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray())
-        return digest.joinToString(separator = "") { byte -> "%02x".format(byte) }.take(24)
     }
 
     private fun org.w3c.dom.Document.firstText(vararg tagNames: String): String? {
@@ -189,19 +207,11 @@ class BookMetadataResolver @Inject constructor(
 
     private companion object {
         private const val CONTAINER_PATH = "META-INF/container.xml"
-        private const val COVER_DIR_NAME = "covers"
         private val LOCAL_COVER_EXTENSIONS = listOf("jpg", "jpeg", "png", "webp")
         private val WHITESPACE_REGEX = Regex("\\s+")
         private val TEXT_TITLE_REGEX = Regex("(?:^|\\n)\\s*(?:书名|小说名|作品名|title)\\s*[:：]\\s*(.+)", RegexOption.IGNORE_CASE)
         private val TEXT_AUTHOR_REGEX = Regex("(?:^|\\n)\\s*(?:作者|author)\\s*[:：]\\s*(.+)", RegexOption.IGNORE_CASE)
         private val TEXT_DESCRIPTION_REGEX = Regex("(?:^|\\n)\\s*(?:简介|内容简介|description)\\s*[:：]\\s*(.+)", RegexOption.IGNORE_CASE)
+        private val TEXT_TAGS_REGEX = Regex("(?:^|\\n)\\s*(?:标签|分类|tags)\\s*[:：]\\s*(.+)", RegexOption.IGNORE_CASE)
     }
 }
-
-data class ResolvedBookMetadata(
-    val title: String? = null,
-    val author: String? = null,
-    val description: String? = null,
-    val coverPath: String? = null,
-    val tags: List<String> = emptyList(),
-)

@@ -22,7 +22,7 @@ object DataModule {
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, "dusk_reader_database")
-            .addMigrations(AppDatabaseMigrations.MIGRATION_3_4)
+            .addMigrations(AppDatabaseMigrations.MIGRATION_3_4, AppDatabaseMigrations.MIGRATION_4_5)
             .fallbackToDestructiveMigration()
             .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
             .build()
