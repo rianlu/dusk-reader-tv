@@ -3,6 +3,7 @@ package com.wzl.duskreader.tv.data.repositories
 import android.os.Environment
 import com.wzl.duskreader.tv.data.entities.Book
 import com.wzl.duskreader.tv.data.local.BookDao
+import com.wzl.duskreader.tv.data.metadata.BookMetadataResolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -12,7 +13,8 @@ import javax.inject.Singleton
 
 @Singleton
 class BookRepositoryImpl @Inject constructor(
-    private val bookDao: BookDao
+    private val bookDao: BookDao,
+    private val metadataResolver: BookMetadataResolver,
 ) : BookRepository {
 
     companion object {
@@ -42,9 +44,16 @@ class BookRepositoryImpl @Inject constructor(
         val files = bookDir.listFiles() ?: return@withContext 0
         for (file in files) {
             if (!file.isFile || file.extension.lowercase() !in SUPPORTED_EXTENSIONS) continue
-            if (bookDao.getBookByPath(file.absolutePath) == null) {
-                bookDao.insertBook(buildImportedBook(file))
+            val importedBook = buildImportedBook(file)
+            val existingBook = bookDao.getBookByPath(file.absolutePath)
+            if (existingBook == null) {
+                bookDao.insertBook(importedBook)
                 importedCount++
+            } else {
+                val refreshedBook = existingBook.mergeImportedMetadata(importedBook)
+                if (refreshedBook != existingBook) {
+                    bookDao.updateBook(refreshedBook)
+                }
             }
         }
         android.util.Log.d(TAG, "scan done: dir=$bookDir, files=${files.size}, imported=$importedCount")
@@ -65,12 +74,31 @@ class BookRepositoryImpl @Inject constructor(
     }
 
     private fun buildImportedBook(file: File): Book {
+        val metadata = metadataResolver.resolve(file)
         return Book(
-            title = file.nameWithoutExtension,
+            title = metadata.title ?: file.nameWithoutExtension,
+            author = metadata.author,
             path = file.absolutePath,
+            coverPath = metadata.coverPath,
+            description = metadata.description,
             format = file.extension.uppercase(),
+            tags = metadata.tags,
             fileSize = file.length(),
-            totalSize = file.length()
+            totalSize = file.length(),
+        )
+    }
+
+    private fun Book.mergeImportedMetadata(imported: Book): Book {
+        val fallbackTitle = File(path).nameWithoutExtension
+        return copy(
+            title = if (title == fallbackTitle && imported.title != fallbackTitle) imported.title else title,
+            author = author ?: imported.author,
+            coverPath = coverPath ?: imported.coverPath,
+            description = description ?: imported.description,
+            tags = if (tags.isEmpty()) imported.tags else tags,
+            format = imported.format,
+            fileSize = imported.fileSize,
+            totalSize = imported.totalSize,
         )
     }
 
