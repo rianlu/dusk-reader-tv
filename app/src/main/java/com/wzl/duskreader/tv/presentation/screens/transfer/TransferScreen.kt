@@ -113,9 +113,9 @@ fun TransferScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             PageHeader(
-                eyebrow = "局域网导入",
-                title = "无线传书",
-                subtitle = "同一 Wi-Fi 下上传 TXT / EPUB 到电视书库.",
+                eyebrow = "局域网管理",
+                title = "书库管理",
+                subtitle = "同一 Wi-Fi 下在浏览器上传, 查看和管理电视书库.",
             )
             when (val current = state) {
                 TransferScreenUiState.Idle -> TransferIdlePanel(
@@ -171,19 +171,19 @@ private fun TransferIdlePanel(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(
-                    text = "开启无线传书服务",
+                    text = "开启书库管理服务",
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = Color.White,
                 )
                 Text(
-                    text = "启动后展示二维码和浏览器地址, 上传完成会自动同步到书库.",
+                    text = "启动后可用电脑或手机浏览器上传, 查看和删除本地书籍.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color.White.copy(alpha = 0.66f),
                 )
             }
             Row(modifier = Modifier.focusGroup()) {
                 DuskTvButton(
-                    text = "开启传书",
+                    text = "开启管理",
                     icon = Icons.Default.UploadFile,
                     modifier = Modifier.focusRequester(buttonRequester),
                     onClick = onStart,
@@ -198,7 +198,7 @@ private fun TransferLoadingPanel() {
     PrimaryPanel {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
-                text = "正在启动传书服务",
+                text = "正在启动管理服务",
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
                 color = Color.White,
             )
@@ -269,7 +269,7 @@ private fun TransferUnavailablePanel(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(
-                    text = "无法开启传书服务",
+                    text = "无法开启管理服务",
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = Color.White,
                 )
@@ -349,7 +349,7 @@ private fun QrCodePanel(qrCode: Bitmap) {
         ) {
             Image(
                 bitmap = qrCode.asImageBitmap(),
-                contentDescription = "传书二维码",
+                contentDescription = "书库管理二维码",
                 modifier = Modifier
                     .size(190.dp)
                     .clip(RoundedCornerShape(10.dp)),

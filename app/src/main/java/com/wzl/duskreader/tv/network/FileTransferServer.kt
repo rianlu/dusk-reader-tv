@@ -21,6 +21,7 @@ import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
@@ -32,6 +33,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 data class TransferServerSnapshot(
@@ -150,6 +152,16 @@ class FileTransferServer @Inject constructor(
             server = embeddedServer(CIO, port = port) {
                 routing {
                     get("/") { call.respondText(renderUploadPageHtml(), ContentType.Text.Html) }
+                    get("/api/status") { call.respondText(renderStatusJson(snapshot.value), ContentType.Application.Json) }
+                    get("/api/books") { handleBooksList(call, repo) }
+                    post("/api/rescan") { handleRescan(call, repo) }
+                    delete("/api/books/{id}") {
+                        handleDeleteBook(
+                            call = call,
+                            repository = repo,
+                            chapterRepository = chapterRepository,
+                        )
+                    }
                     post("/upload") {
                         handleUpload(
                             call = call,
@@ -191,103 +203,360 @@ private fun renderUploadPageHtml(): String = """
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>暮阅 · 无线传书</title>
+  <title>暮阅 · 书库管理</title>
   <style>
     :root {
       color-scheme: light;
       --bg: #eef1f5;
-      --card: rgba(255,255,255,0.92);
+      --card: rgba(255,255,255,0.94);
       --text: #18212a;
-      --subtle: #5c6a78;
+      --subtle: #5d6b7a;
       --brand: #2049d8;
       --brand-dark: #1738aa;
-      --border: rgba(24,33,42,0.08);
+      --danger: #c73737;
+      --border: rgba(24,33,42,0.10);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       padding: 24px;
       background:
-        radial-gradient(circle at top left, rgba(32,73,216,0.14), transparent 30%),
+        radial-gradient(circle at top left, rgba(32,73,216,0.14), transparent 32%),
         linear-gradient(180deg, #f7f9fb 0%, var(--bg) 100%);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
+    main { width: min(100%, 980px); margin: 0 auto; }
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    h1 { margin: 0 0 8px; font-size: 34px; letter-spacing: -0.02em; }
+    p { margin: 0; color: var(--subtle); line-height: 1.6; }
+    .status { color: #2740a0; font-weight: 600; white-space: nowrap; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
     .card {
-      width: min(100%, 560px);
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 28px;
-      padding: 28px;
-      box-shadow: 0 22px 48px rgba(20, 28, 40, 0.12);
+      padding: 22px;
+      box-shadow: 0 18px 46px rgba(20, 28, 40, 0.10);
       backdrop-filter: blur(16px);
     }
-    h2 { margin: 0 0 10px; font-size: 30px; }
-    p { margin: 0 0 18px; color: var(--subtle); line-height: 1.6; }
-    .hint {
-      margin: 18px 0 22px;
-      padding: 14px 16px;
-      border-radius: 18px;
-      background: rgba(32,73,216,0.08);
-      color: #2740a0;
-      font-size: 14px;
-    }
+    .card h2 { margin: 0 0 14px; font-size: 22px; }
+    .upload-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; }
     input[type=file] {
       width: 100%;
-      padding: 18px;
-      border-radius: 18px;
-      border: 1px dashed rgba(24,33,42,0.18);
-      background: rgba(255,255,255,0.7);
-      margin-bottom: 18px;
+      padding: 15px;
+      border-radius: 16px;
+      border: 1px dashed rgba(24,33,42,0.20);
+      background: rgba(255,255,255,0.78);
     }
     button {
-      width: 100%;
       border: none;
-      border-radius: 18px;
-      padding: 16px 24px;
+      border-radius: 16px;
+      padding: 14px 20px;
       background: linear-gradient(135deg, var(--brand), #5b7cff);
       color: white;
-      font-size: 17px;
-      font-weight: 600;
+      font-size: 15px;
+      font-weight: 700;
       cursor: pointer;
     }
-    button:active { background: var(--brand-dark); }
-    ul {
-      margin: 18px 0 0;
-      padding-left: 20px;
-      color: var(--subtle);
-      line-height: 1.7;
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    button.secondary { background: #e9edf5; color: #263448; }
+    button.danger { background: rgba(199,55,55,0.10); color: var(--danger); }
+    .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .message { min-height: 24px; margin-top: 12px; color: var(--subtle); }
+    .books { display: grid; gap: 10px; }
+    .book {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: center;
+      padding: 15px 16px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.70);
     }
-    small {
-      display: block;
-      margin-top: 18px;
-      color: var(--subtle);
+    .book-title { font-weight: 700; margin-bottom: 6px; }
+    .meta { color: var(--subtle); font-size: 13px; line-height: 1.5; }
+    .empty { color: var(--subtle); padding: 18px; text-align: center; border: 1px dashed var(--border); border-radius: 18px; }
+    @media (max-width: 640px) {
+      body { padding: 16px; }
+      header { display: block; }
+      .status { display: block; margin-top: 10px; white-space: normal; }
+      .upload-row, .book { grid-template-columns: 1fr; }
+      button { width: 100%; }
     }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h2>暮阅 · 无线传书</h2>
-    <p>选择 TXT 或 EPUB 文件发送到电视，上传完成后书库会自动刷新。</p>
-    <div class="hint">同名文件会直接覆盖更新，适合重新导入修订后的版本。</div>
-    <form action="/upload" enctype="multipart/form-data" method="post">
-      <input type="file" name="file" accept=".txt,.epub" required />
-      <button type="submit">发送到电视</button>
-    </form>
-    <ul>
-      <li>确保手机/电脑和电视连接在同一局域网。</li>
-      <li>上传后可回到电视首页或书库查看新增书籍。</li>
-      <li>如果浏览器打不开，请返回电视端刷新传书服务状态。</li>
-    </ul>
-    <small>支持格式：TXT / EPUB</small>
-  </div>
+  <main>
+    <header>
+      <div>
+        <h1>暮阅 · 书库管理</h1>
+        <p>在同一局域网内上传 TXT / EPUB, 查看或删除电视本地书库。</p>
+      </div>
+      <div id="status" class="status">正在连接电视...</div>
+    </header>
+
+    <section class="grid">
+      <div class="card">
+        <h2>上传书籍</h2>
+        <form id="uploadForm" class="upload-row">
+          <input id="fileInput" type="file" name="file" accept=".txt,.epub" required />
+          <button id="uploadButton" type="submit">上传到电视</button>
+        </form>
+        <div id="uploadMessage" class="message">同名文件会覆盖旧版本, 并重置旧章节缓存。</div>
+      </div>
+
+      <div class="card">
+        <div class="toolbar">
+          <h2>电视书库</h2>
+          <button id="rescanButton" class="secondary" type="button">重新扫描</button>
+        </div>
+        <div id="books" class="books"><div class="empty">正在加载书库...</div></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const booksEl = document.getElementById('books');
+    const statusEl = document.getElementById('status');
+    const uploadForm = document.getElementById('uploadForm');
+    const fileInput = document.getElementById('fileInput');
+    const uploadButton = document.getElementById('uploadButton');
+    const uploadMessage = document.getElementById('uploadMessage');
+    const rescanButton = document.getElementById('rescanButton');
+
+    function formatSize(bytes) {
+      if (!bytes) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      let value = bytes;
+      let index = 0;
+      while (value >= 1024 && index < units.length - 1) {
+        value /= 1024;
+        index++;
+      }
+      return value.toFixed(index === 0 ? 0 : 1) + ' ' + units[index];
+    }
+
+    function formatTime(value) {
+      if (!value) return '无阅读记录';
+      return new Date(value).toLocaleString();
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[char]));
+    }
+
+    async function requestJson(url, options) {
+      const response = await fetch(url, options);
+      const text = await response.text();
+      if (!response.ok) throw new Error(text || ('请求失败: ' + response.status));
+      return text ? JSON.parse(text) : {};
+    }
+
+    async function loadStatus() {
+      try {
+        const status = await requestJson('/api/status');
+        statusEl.textContent = status.running ? '服务已就绪' : '服务未启动';
+      } catch (error) {
+        statusEl.textContent = '连接失败';
+      }
+    }
+
+    async function loadBooks() {
+      booksEl.innerHTML = '<div class="empty">正在加载书库...</div>';
+      try {
+        const data = await requestJson('/api/books');
+        if (!data.books.length) {
+          booksEl.innerHTML = '<div class="empty">书库为空, 请先上传 TXT 或 EPUB。</div>';
+          return;
+        }
+        booksEl.innerHTML = data.books.map(book => [
+          '<div class="book">',
+          '<div>',
+          '<div class="book-title">' + escapeHtml(book.title) + '</div>',
+          '<div class="meta">' + escapeHtml(book.author || '未知作者') + ' · ' + escapeHtml(book.format) + ' · ' + formatSize(book.fileSize) + '</div>',
+          '<div class="meta">最近阅读: ' + formatTime(book.lastReadTime) + '</div>',
+          '</div>',
+          '<button class="danger" type="button" data-delete="' + book.id + '">删除</button>',
+          '</div>'
+        ].join('')).join('');
+      } catch (error) {
+        booksEl.innerHTML = '<div class="empty">加载失败: ' + escapeHtml(error.message) + '</div>';
+      }
+    }
+
+    uploadForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!fileInput.files.length) return;
+      uploadButton.disabled = true;
+      uploadMessage.textContent = '正在上传...';
+      try {
+        const body = new FormData(uploadForm);
+        const response = await fetch('/upload', { method: 'POST', body });
+        const text = await response.text();
+        if (!response.ok) throw new Error(text || '上传失败');
+        uploadMessage.textContent = text;
+        fileInput.value = '';
+        await loadBooks();
+      } catch (error) {
+        uploadMessage.textContent = error.message;
+      } finally {
+        uploadButton.disabled = false;
+      }
+    });
+
+    rescanButton.addEventListener('click', async () => {
+      rescanButton.disabled = true;
+      try {
+        const result = await requestJson('/api/rescan', { method: 'POST' });
+        uploadMessage.textContent = '扫描完成, 新增 ' + result.imported + ' 本';
+        await loadBooks();
+      } catch (error) {
+        uploadMessage.textContent = error.message;
+      } finally {
+        rescanButton.disabled = false;
+      }
+    });
+
+    booksEl.addEventListener('click', async event => {
+      const id = event.target.dataset.delete;
+      if (!id) return;
+      if (!confirm('确定从电视书库删除这本书吗? 本地文件也会被删除。')) return;
+      event.target.disabled = true;
+      try {
+        await requestJson('/api/books/' + id, { method: 'DELETE' });
+        await loadBooks();
+      } catch (error) {
+        alert(error.message);
+        event.target.disabled = false;
+      }
+    });
+
+    loadStatus();
+    loadBooks();
+  </script>
 </body>
 </html>
 """.trimIndent()
+
+
+private suspend fun handleBooksList(
+    call: ApplicationCall,
+    repository: BookRepository,
+) {
+    val books = repository.getAllBooks().first()
+    call.respondText(renderBooksJson(books), ContentType.Application.Json)
+}
+
+private suspend fun handleRescan(
+    call: ApplicationCall,
+    repository: BookRepository,
+) {
+    val imported = repository.scanLocalStorage()
+    call.respondText("""{"success":true,"imported":$imported}""", ContentType.Application.Json)
+}
+
+private suspend fun handleDeleteBook(
+    call: ApplicationCall,
+    repository: BookRepository,
+    chapterRepository: BookChapterRepository,
+) {
+    val bookId = call.parameters["id"]?.toLongOrNull()
+    if (bookId == null) {
+        call.respondText("书籍 ID 无效", ContentType.Text.Plain, HttpStatusCode.BadRequest)
+        return
+    }
+
+    val book = repository.getBookById(bookId)
+    if (book == null) {
+        call.respondText("未找到这本书", ContentType.Text.Plain, HttpStatusCode.NotFound)
+        return
+    }
+
+    withContext(Dispatchers.IO) {
+        chapterRepository.replaceForBook(book.id, emptyList())
+        repository.delete(book)
+        runCatching {
+            val file = File(book.path)
+            if (file.isFile) file.delete()
+        }
+    }
+    call.respondText("""{"success":true}""", ContentType.Application.Json)
+}
+
+private fun renderStatusJson(snapshot: TransferServerSnapshot): String {
+    return buildString {
+        append('{')
+        append("\"available\":").append(snapshot.isAvailable).append(',')
+        append("\"running\":").append(snapshot.isRunning).append(',')
+        append("\"url\":").append(snapshot.url.toJsonString()).append(',')
+        append("\"message\":").append(snapshot.message.toJsonString()).append(',')
+        append("\"lastUploadMessage\":").append(snapshot.lastUploadMessage.toJsonString()).append(',')
+        append("\"lastUploadAtMillis\":").append(snapshot.lastUploadAtMillis ?: "null")
+        append('}')
+    }
+}
+
+private fun renderBooksJson(books: List<Book>): String {
+    return books.joinToString(
+        prefix = "{\"books\":[",
+        postfix = "]}",
+    ) { book ->
+        buildString {
+            append('{')
+            append("\"id\":").append(book.id).append(',')
+            append("\"title\":").append(book.title.toJsonString()).append(',')
+            append("\"author\":").append(book.author.toJsonString()).append(',')
+            append("\"format\":").append(book.format.toJsonString()).append(',')
+            append("\"bookKind\":").append(book.bookKind.toJsonString()).append(',')
+            append("\"fileSize\":").append(book.fileSize).append(',')
+            append("\"lastReadTime\":").append(book.lastReadTime).append(',')
+            append("\"importedAt\":").append(book.importedAt)
+            append('}')
+        }
+    }
+}
+
+private fun String?.toJsonString(): String {
+    if (this == null) return "null"
+    return buildString {
+        append('"')
+        for (char in this@toJsonString) {
+            when (char) {
+                '\\' -> append("\\\\")
+                '"' -> append("\\\"")
+                '\b' -> append("\\b")
+                '\u000C' -> append("\\f")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
+                else -> {
+                    if (char.code < 0x20) {
+                        append("\\u")
+                        append(char.code.toString(16).padStart(4, '0'))
+                    } else {
+                        append(char)
+                    }
+                }
+            }
+        }
+        append('"')
+    }
+}
 
 private suspend fun handleUpload(
     call: ApplicationCall,

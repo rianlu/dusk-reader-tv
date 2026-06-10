@@ -187,7 +187,7 @@ private fun DuskReaderLogo(
 private fun Screens.sectionLabel(): String = when (this) {
     Screens.Home -> "继续阅读"
     Screens.Bookshelf -> "全部书库"
-    Screens.Transfer -> "无线传书"
+    Screens.Transfer -> "书库管理"
     Screens.Settings -> "应用设置"
     else -> "本地书库"
 }

@@ -17,7 +17,7 @@ enum class Screens(
 ) {
     Home(isTabItem = true, tabIcon = Icons.Default.Home, tabLabel = "首页"),
     Bookshelf(isTabItem = true, tabIcon = Icons.AutoMirrored.Filled.LibraryBooks, tabLabel = "书库"),
-    Transfer(isTabItem = true, tabIcon = Icons.Default.CloudUpload, tabLabel = "传书"),
+    Transfer(isTabItem = true, tabIcon = Icons.Default.CloudUpload, tabLabel = "管理"),
     Settings(isTabItem = true, tabIcon = Icons.Default.Settings, tabLabel = "设置"),
     Dashboard,
     BookDetails(listOf(BookDetailsScreen.BookIdBundleKey)),

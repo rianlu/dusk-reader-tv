@@ -501,7 +501,7 @@ private fun EmptyBookshelf(
                     color = Color.White,
                 )
                 Text(
-                    text = "通过无线传书导入 TXT / EPUB, 本地目录扫描可在设置页执行.",
+                    text = "通过局域网书库管理导入 TXT / EPUB, 本地目录扫描可在设置页执行.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.68f),
                 )
@@ -510,7 +510,7 @@ private fun EmptyBookshelf(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     DuskTvButton(
-                        text = "去传书",
+                        text = "去管理",
                         modifier = Modifier.focusRequester(transferRequester),
                         onClick = onGoTransfer,
                     )
