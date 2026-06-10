@@ -113,7 +113,7 @@ class FileTransferServer @Inject constructor(
             TransferServerSnapshot(
                 isAvailable = true,
                 isRunning = false,
-                message = lastStartError ?: "传书服务启动失败，请稍后重试",
+                message = lastStartError ?: "书库管理服务启动失败，请稍后重试",
                 lastUploadMessage = lastUploadMessage,
                 lastUploadAtMillis = lastUploadAtMillis,
             )
@@ -206,90 +206,210 @@ private fun renderUploadPageHtml(): String = """
   <title>暮阅 · 书库管理</title>
   <style>
     :root {
-      color-scheme: light;
-      --bg: #eef1f5;
-      --card: rgba(255,255,255,0.94);
-      --text: #18212a;
-      --subtle: #5d6b7a;
-      --brand: #2049d8;
-      --brand-dark: #1738aa;
-      --danger: #c73737;
-      --border: rgba(24,33,42,0.10);
+      color-scheme: dark;
+      --bg: #070d15;
+      --panel: rgba(13, 22, 34, 0.82);
+      --panel-strong: rgba(16, 28, 43, 0.96);
+      --panel-soft: rgba(255,255,255,0.06);
+      --text: #f7fbff;
+      --muted: rgba(247,251,255,0.62);
+      --faint: rgba(247,251,255,0.38);
+      --brand: #89b4ff;
+      --brand-strong: #4f7dff;
+      --accent: #ffd58a;
+      --danger: #ff7d7d;
+      --border: rgba(255,255,255,0.12);
+      --shadow: 0 24px 80px rgba(0,0,0,0.38);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      padding: 24px;
+      padding: 32px;
       background:
-        radial-gradient(circle at top left, rgba(32,73,216,0.14), transparent 32%),
-        linear-gradient(180deg, #f7f9fb 0%, var(--bg) 100%);
+        radial-gradient(circle at 12% 0%, rgba(79,125,255,0.26), transparent 34%),
+        radial-gradient(circle at 88% 8%, rgba(255,213,138,0.14), transparent 30%),
+        linear-gradient(180deg, #0b1420 0%, var(--bg) 100%);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    main { width: min(100%, 980px); margin: 0 auto; }
+    main { width: min(100%, 1180px); margin: 0 auto; }
     header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 24px;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      color: var(--brand);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--brand); box-shadow: 0 0 22px var(--brand); }
+    h1 { margin: 0 0 10px; font-size: clamp(34px, 5vw, 58px); line-height: 1; letter-spacing: -0.055em; }
+    h2 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
+    p { margin: 0; color: var(--muted); line-height: 1.65; }
+    button, input { font: inherit; }
+    button {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 12px 18px;
+      background: linear-gradient(135deg, var(--brand-strong), #86adff);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform .18s ease, opacity .18s ease, border-color .18s ease, background .18s ease;
+    }
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: .48; cursor: not-allowed; transform: none; }
+    button.secondary { background: rgba(255,255,255,0.08); color: var(--text); border-color: var(--border); }
+    button.danger { background: rgba(255,125,125,0.10); color: var(--danger); border-color: rgba(255,125,125,0.22); }
+    .status-card {
+      min-width: 190px;
+      padding: 16px 18px;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      background: rgba(255,255,255,0.07);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+    .status-label { color: var(--faint); font-size: 12px; font-weight: 800; letter-spacing: .10em; text-transform: uppercase; }
+    .status { margin-top: 8px; color: var(--brand); font-weight: 900; }
+    .dashboard { display: grid; grid-template-columns: 1fr; gap: 18px; align-items: start; }
+    .card {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 32px;
+      background: linear-gradient(180deg, var(--panel-strong), var(--panel));
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(22px);
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(135deg, rgba(255,255,255,0.12), transparent 42%);
+    }
+    .card-content { position: relative; padding: 24px; }
+    .upload-card { min-height: 0; }
+    .upload-zone {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) minmax(260px, 0.9fr);
+      align-items: center;
+      gap: 18px;
+      margin-top: 18px;
+      padding: 20px;
+      border: 1px dashed rgba(137,180,255,0.36);
+      border-radius: 28px;
+      background: rgba(137,180,255,0.08);
+      cursor: pointer;
+    }
+    .upload-icon {
+      display: grid;
+      place-items: center;
+      width: 76px;
+      height: 76px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, rgba(79,125,255,0.32), rgba(137,180,255,0.18));
+      color: var(--brand);
+      font-size: 34px;
+    }
+    input[type=file] { width: 100%; color: var(--muted); }
+    input[type=file]::file-selector-button {
+      margin-right: 12px;
+      border: 0;
+      border-radius: 999px;
+      padding: 11px 15px;
+      background: rgba(255,255,255,0.12);
+      color: var(--text);
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .upload-actions { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 16px; }
+    .message { min-height: 24px; margin-top: 14px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+    .toolbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
+    .library-summary { margin-top: 6px; color: var(--muted); font-size: 14px; }
+    .books {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      gap: 14px;
+    }
+    .book {
+      position: relative;
+      display: grid;
+      min-height: 226px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 26px;
+      background: rgba(255,255,255,0.065);
+      transition: transform .18s ease, border-color .18s ease, background .18s ease;
+    }
+    .book:hover { transform: translateY(-3px); border-color: rgba(137,180,255,0.45); background: rgba(255,255,255,0.095); }
+    .book-cover {
+      height: 112px;
+      border-radius: 20px;
+      background:
+        radial-gradient(circle at 24% 20%, rgba(255,255,255,0.25), transparent 24%),
+        linear-gradient(135deg, rgba(79,125,255,0.72), rgba(15,27,42,0.96) 62%, rgba(255,213,138,0.22));
+      padding: 14px;
       display: flex;
       align-items: flex-end;
       justify-content: space-between;
-      gap: 18px;
-      margin-bottom: 18px;
+      overflow: hidden;
     }
-    h1 { margin: 0 0 8px; font-size: 34px; letter-spacing: -0.02em; }
-    p { margin: 0; color: var(--subtle); line-height: 1.6; }
-    .status { color: #2740a0; font-weight: 600; white-space: nowrap; }
-    .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 28px;
-      padding: 22px;
-      box-shadow: 0 18px 46px rgba(20, 28, 40, 0.10);
-      backdrop-filter: blur(16px);
+    .cover-mark { color: rgba(255,255,255,0.38); font-size: 13px; font-weight: 900; letter-spacing: .16em; text-transform: uppercase; }
+    .cover-format {
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 999px;
+      padding: 5px 9px;
+      color: #fff;
+      background: rgba(255,255,255,0.13);
+      font-size: 12px;
+      font-weight: 900;
     }
-    .card h2 { margin: 0 0 14px; font-size: 22px; }
-    .upload-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; }
-    input[type=file] {
-      width: 100%;
-      padding: 15px;
-      border-radius: 16px;
-      border: 1px dashed rgba(24,33,42,0.20);
-      background: rgba(255,255,255,0.78);
+    .book-body { display: grid; gap: 8px; align-content: start; margin-top: 14px; }
+    .book-title {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      font-weight: 900;
+      line-height: 1.28;
     }
-    button {
-      border: none;
-      border-radius: 16px;
-      padding: 14px 20px;
-      background: linear-gradient(135deg, var(--brand), #5b7cff);
-      color: white;
-      font-size: 15px;
-      font-weight: 700;
-      cursor: pointer;
+    .meta { color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pill { border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px; color: var(--muted); font-size: 12px; font-weight: 800; }
+    .book-actions { display: flex; justify-content: flex-end; align-items: end; margin-top: 14px; }
+    .empty {
+      grid-column: 1 / -1;
+      padding: 32px;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed var(--border);
+      border-radius: 26px;
+      background: rgba(255,255,255,0.045);
     }
-    button:disabled { opacity: .45; cursor: not-allowed; }
-    button.secondary { background: #e9edf5; color: #263448; }
-    button.danger { background: rgba(199,55,55,0.10); color: var(--danger); }
-    .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-    .message { min-height: 24px; margin-top: 12px; color: var(--subtle); }
-    .books { display: grid; gap: 10px; }
-    .book {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 14px;
-      align-items: center;
-      padding: 15px 16px;
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      background: rgba(255,255,255,0.70);
+    @media (max-width: 900px) {
+      body { padding: 20px; }
+      header { grid-template-columns: 1fr; }
+      .status-card { min-width: 0; }
+      .upload-zone { grid-template-columns: 1fr; text-align: center; justify-items: center; }
     }
-    .book-title { font-weight: 700; margin-bottom: 6px; }
-    .meta { color: var(--subtle); font-size: 13px; line-height: 1.5; }
-    .empty { color: var(--subtle); padding: 18px; text-align: center; border: 1px dashed var(--border); border-radius: 18px; }
-    @media (max-width: 640px) {
-      body { padding: 16px; }
-      header { display: block; }
-      .status { display: block; margin-top: 10px; white-space: normal; }
-      .upload-row, .book { grid-template-columns: 1fr; }
+    @media (max-width: 540px) {
+      body { padding: 14px; }
+      .card-content { padding: 18px; }
+      .toolbar { display: grid; }
+      .books { grid-template-columns: 1fr; }
       button { width: 100%; }
     }
   </style>
@@ -298,28 +418,49 @@ private fun renderUploadPageHtml(): String = """
   <main>
     <header>
       <div>
-        <h1>暮阅 · 书库管理</h1>
-        <p>在同一局域网内上传 TXT / EPUB, 查看或删除电视本地书库。</p>
+        <div class="eyebrow">Local Library</div>
+        <h1>暮阅书库管理</h1>
+        <p>在同一局域网内批量上传 TXT / EPUB, 并管理电视本地书库。</p>
       </div>
-      <div id="status" class="status">正在连接电视...</div>
+      <div class="status-card">
+        <div class="status-label">Device status</div>
+        <div id="status" class="status">正在连接电视...</div>
+      </div>
     </header>
 
-    <section class="grid">
-      <div class="card">
-        <h2>上传书籍</h2>
-        <form id="uploadForm" class="upload-row">
-          <input id="fileInput" type="file" name="file" accept=".txt,.epub" required />
-          <button id="uploadButton" type="submit">上传到电视</button>
-        </form>
-        <div id="uploadMessage" class="message">同名文件会覆盖旧版本, 并重置旧章节缓存。</div>
+    <section class="dashboard">
+      <div class="card upload-card">
+        <div class="card-content">
+          <h2>批量上传</h2>
+          <p>可一次选择多本书。同名文件会覆盖旧版本, 并重置旧章节缓存。</p>
+          <form id="uploadForm">
+            <label class="upload-zone" for="fileInput">
+              <div class="upload-icon">↑</div>
+              <div>
+                <strong>选择 TXT / EPUB 文件</strong>
+                <p>支持多选, 上传完成后自动刷新书库。</p>
+              </div>
+              <input id="fileInput" type="file" name="file" accept=".txt,.epub" multiple required />
+            </label>
+            <div class="upload-actions">
+              <button id="uploadButton" type="submit">上传到电视</button>
+            </div>
+          </form>
+          <div id="uploadMessage" class="message">请选择一个或多个文件。</div>
+        </div>
       </div>
 
       <div class="card">
-        <div class="toolbar">
-          <h2>电视书库</h2>
-          <button id="rescanButton" class="secondary" type="button">重新扫描</button>
+        <div class="card-content">
+          <div class="toolbar">
+            <div>
+              <h2>电视书库</h2>
+              <div id="librarySummary" class="library-summary">正在同步书库状态...</div>
+            </div>
+            <button id="rescanButton" class="secondary" type="button">重新扫描</button>
+          </div>
+          <div id="books" class="books"><div class="empty">正在加载书库...</div></div>
         </div>
-        <div id="books" class="books"><div class="empty">正在加载书库...</div></div>
       </div>
     </section>
   </main>
@@ -332,6 +473,7 @@ private fun renderUploadPageHtml(): String = """
     const uploadButton = document.getElementById('uploadButton');
     const uploadMessage = document.getElementById('uploadMessage');
     const rescanButton = document.getElementById('rescanButton');
+    const librarySummary = document.getElementById('librarySummary');
 
     function formatSize(bytes) {
       if (!bytes) return '0 B';
@@ -347,7 +489,7 @@ private fun renderUploadPageHtml(): String = """
 
     function formatTime(value) {
       if (!value) return '无阅读记录';
-      return new Date(value).toLocaleString();
+      return new Date(value).toLocaleDateString();
     }
 
     function escapeHtml(value) {
@@ -358,6 +500,15 @@ private fun renderUploadPageHtml(): String = """
         '"': '&quot;',
         "'": '&#39;'
       }[char]));
+    }
+
+    function formatSelection() {
+      const count = fileInput.files.length;
+      if (!count) {
+        uploadMessage.textContent = '请选择一个或多个文件。';
+        return;
+      }
+      uploadMessage.textContent = '已选择 ' + count + ' 个文件, 点击上传到电视。';
     }
 
     async function requestJson(url, options) {
@@ -380,30 +531,36 @@ private fun renderUploadPageHtml(): String = """
       booksEl.innerHTML = '<div class="empty">正在加载书库...</div>';
       try {
         const data = await requestJson('/api/books');
+        librarySummary.textContent = '共 ' + data.books.length + ' 本书, 可上传, 删除或重新扫描。';
         if (!data.books.length) {
           booksEl.innerHTML = '<div class="empty">书库为空, 请先上传 TXT 或 EPUB。</div>';
           return;
         }
         booksEl.innerHTML = data.books.map(book => [
-          '<div class="book">',
-          '<div>',
+          '<article class="book">',
+          '<div class="book-cover"><span class="cover-mark">Dusk</span><span class="cover-format">' + escapeHtml(book.format) + '</span></div>',
+          '<div class="book-body">',
           '<div class="book-title">' + escapeHtml(book.title) + '</div>',
-          '<div class="meta">' + escapeHtml(book.author || '未知作者') + ' · ' + escapeHtml(book.format) + ' · ' + formatSize(book.fileSize) + '</div>',
+          '<div class="pill-row"><span class="pill">' + escapeHtml(book.format) + '</span><span class="pill">' + formatSize(book.fileSize) + '</span></div>',
+          '<div class="meta">' + escapeHtml(book.author || '未知作者') + '</div>',
           '<div class="meta">最近阅读: ' + formatTime(book.lastReadTime) + '</div>',
           '</div>',
-          '<button class="danger" type="button" data-delete="' + book.id + '">删除</button>',
-          '</div>'
+          '<div class="book-actions"><button class="danger" type="button" data-delete="' + book.id + '">删除</button></div>',
+          '</article>'
         ].join('')).join('');
       } catch (error) {
+        librarySummary.textContent = '书库状态同步失败';
         booksEl.innerHTML = '<div class="empty">加载失败: ' + escapeHtml(error.message) + '</div>';
       }
     }
+
+    fileInput.addEventListener('change', formatSelection);
 
     uploadForm.addEventListener('submit', async event => {
       event.preventDefault();
       if (!fileInput.files.length) return;
       uploadButton.disabled = true;
-      uploadMessage.textContent = '正在上传...';
+      uploadMessage.textContent = '正在上传 ' + fileInput.files.length + ' 个文件...';
       try {
         const body = new FormData(uploadForm);
         const response = await fetch('/upload', { method: 'POST', body });
@@ -438,7 +595,8 @@ private fun renderUploadPageHtml(): String = """
       if (!confirm('确定从电视书库删除这本书吗? 本地文件也会被删除。')) return;
       event.target.disabled = true;
       try {
-        await requestJson('/api/books/' + id, { method: 'DELETE' });
+        const result = await requestJson('/api/books/' + id, { method: 'DELETE' });
+        uploadMessage.textContent = result.fileDeleted ? '已删除书籍和本地文件。' : '已从书库移除, 但本地文件可能已不存在。';
         await loadBooks();
       } catch (error) {
         alert(error.message);
@@ -487,15 +645,15 @@ private suspend fun handleDeleteBook(
         return
     }
 
-    withContext(Dispatchers.IO) {
+    val fileDeleted = withContext(Dispatchers.IO) {
         chapterRepository.replaceForBook(book.id, emptyList())
         repository.delete(book)
         runCatching {
             val file = File(book.path)
-            if (file.isFile) file.delete()
-        }
+            !file.isFile || file.delete()
+        }.getOrDefault(false)
     }
-    call.respondText("""{"success":true}""", ContentType.Application.Json)
+    call.respondText("""{"success":true,"fileDeleted":$fileDeleted}""", ContentType.Application.Json)
 }
 
 private fun renderStatusJson(snapshot: TransferServerSnapshot): String {
@@ -566,18 +724,15 @@ private suspend fun handleUpload(
 ) {
     try {
         val multipart = call.receiveMultipart()
-        var uploadedBook: Book? = null
-        var uploadError: String? = null
-        var uploadedFilename: String? = null
+        val uploadedFilenames = mutableListOf<String>()
+        val skippedFilenames = mutableListOf<String>()
 
         multipart.forEachPart { part ->
             try {
                 val filePart = part as? PartData.FileItem ?: return@forEachPart
-                if (uploadedBook != null || uploadError != null) return@forEachPart
-
                 val safeName = UploadFilePolicy.resolveSafeFilename(filePart.originalFileName)
                 if (safeName == null) {
-                    uploadError = "仅支持 TXT/EPUB 文件，且文件名必须合法。"
+                    skippedFilenames += filePart.originalFileName?.takeIf { it.isNotBlank() } ?: "未命名文件"
                     return@forEachPart
                 }
 
@@ -588,7 +743,6 @@ private suspend fun handleUpload(
                     if (!it.exists()) it.mkdirs()
                 }
                 val destFile = File(bookDir, safeName)
-                uploadedFilename = safeName
 
                 withContext(Dispatchers.IO) {
                     filePart.streamProvider().use { input ->
@@ -599,54 +753,61 @@ private suspend fun handleUpload(
                     val existing = repository.findBookByPath(destFile.absolutePath)
                     val uploadedFormat = safeName.substringAfterLast(".").uppercase()
                     val uploadedTitle = safeName.substringBeforeLast(".")
-                    uploadedBook = if (existing != null) {
+                    if (existing != null) {
                         chapterRepository.replaceForBook(existing.id, emptyList())
-                        existing.copy(
-                            title = uploadedTitle,
-                            author = null,
-                            coverPath = null,
-                            backdropPath = null,
-                            description = null,
-                            format = uploadedFormat,
-                            bookKind = BookKind.fromFormat(uploadedFormat).id,
-                            coverSource = CoverSource.None.id,
-                            sourceUrl = null,
-                            tags = emptyList(),
-                            fileSize = destFile.length(),
-                            totalSize = destFile.length(),
-                            lastReadChapter = 0,
-                            lastReadPosition = 0,
-                            lastReadTime = System.currentTimeMillis(),
-                        ).also { repository.update(it) }
-                    } else {
-                        val book = Book(
-                            title = uploadedTitle,
-                            path = destFile.absolutePath,
-                            format = uploadedFormat,
-                            bookKind = BookKind.fromFormat(uploadedFormat).id,
-                            coverSource = CoverSource.None.id,
-                            fileSize = destFile.length(),
-                            totalSize = destFile.length(),
+                        repository.update(
+                            existing.copy(
+                                title = uploadedTitle,
+                                author = null,
+                                coverPath = null,
+                                backdropPath = null,
+                                description = null,
+                                format = uploadedFormat,
+                                bookKind = BookKind.fromFormat(uploadedFormat).id,
+                                coverSource = CoverSource.None.id,
+                                sourceUrl = null,
+                                tags = emptyList(),
+                                fileSize = destFile.length(),
+                                totalSize = destFile.length(),
+                                lastReadChapter = 0,
+                                lastReadPosition = 0,
+                                lastReadTime = System.currentTimeMillis(),
+                            ),
                         )
-                        val bookId = repository.insert(book)
-                        book.copy(id = bookId)
+                    } else {
+                        repository.insert(
+                            Book(
+                                title = uploadedTitle,
+                                path = destFile.absolutePath,
+                                format = uploadedFormat,
+                                bookKind = BookKind.fromFormat(uploadedFormat).id,
+                                coverSource = CoverSource.None.id,
+                                fileSize = destFile.length(),
+                                totalSize = destFile.length(),
+                            ),
+                        )
                     }
                 }
+                uploadedFilenames += safeName
             } finally {
                 part.dispose()
             }
         }
 
-        when {
-            uploadError != null -> call.respond(HttpStatusCode.BadRequest, uploadError!!)
-            uploadedBook != null -> {
-                repository.scanLocalStorage()
-                onUploadResult("最近上传：${uploadedFilename ?: uploadedBook!!.title}", System.currentTimeMillis())
-                call.respondText("上传成功：${uploadedFilename ?: uploadedBook!!.title}", ContentType.Text.Plain)
+        if (uploadedFilenames.isEmpty()) {
+            val message = if (skippedFilenames.isEmpty()) {
+                "未检测到可上传的文件。"
+            } else {
+                "未上传成功。仅支持 TXT/EPUB 文件：${skippedFilenames.joinToString("、")}"
             }
-
-            else -> call.respond(HttpStatusCode.BadRequest, "未检测到可上传的文件。")
+            call.respondText(message, ContentType.Text.Plain, HttpStatusCode.BadRequest)
+            return
         }
+
+        repository.scanLocalStorage()
+        val uploadMessage = buildUploadResultMessage(uploadedFilenames, skippedFilenames)
+        onUploadResult(uploadMessage, System.currentTimeMillis())
+        call.respondText(uploadMessage, ContentType.Text.Plain)
     } catch (error: Exception) {
         DebugLogger.e("TransferServer", "handleUpload failed", error)
         call.respondText(
@@ -654,5 +815,21 @@ private suspend fun handleUpload(
             ContentType.Text.Plain,
             HttpStatusCode.InternalServerError,
         )
+    }
+}
+
+private fun buildUploadResultMessage(
+    uploadedFilenames: List<String>,
+    skippedFilenames: List<String>,
+): String {
+    val uploadedText = if (uploadedFilenames.size == 1) {
+        "上传成功：${uploadedFilenames.first()}"
+    } else {
+        "上传成功：${uploadedFilenames.size} 本"
+    }
+    return if (skippedFilenames.isEmpty()) {
+        uploadedText
+    } else {
+        "$uploadedText；已跳过 ${skippedFilenames.size} 个不支持的文件"
     }
 }
