@@ -20,11 +20,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Storage
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,7 +65,6 @@ private data class SettingsAction(
 private enum class SettingsActionType {
     Rescan,
     LibraryPath,
-    Cache,
     Version,
 }
 
@@ -98,13 +95,6 @@ fun SettingsScreen(
                 action = SettingsActionType.LibraryPath,
             ),
             SettingsAction(
-                title = "缓存状态",
-                subtitle = "封面缓存和解析缓存由系统自动维护",
-                icon = Icons.Default.DeleteOutline,
-                enabled = false,
-                action = SettingsActionType.Cache,
-            ),
-            SettingsAction(
                 title = "当前版本",
                 subtitle = "暮阅 TV $APP_VERSION_NAME",
                 icon = Icons.Default.Info,
@@ -113,7 +103,6 @@ fun SettingsScreen(
             ),
         )
     }
-
 
     DuskScreenBackground(modifier = modifier) {
         LazyColumn(
@@ -133,7 +122,7 @@ fun SettingsScreen(
                 PageHeader(
                     eyebrow = "系统维护",
                     title = "应用设置",
-                    subtitle = "管理书库扫描, 本地目录, 缓存状态和版本信息.",
+                    subtitle = "管理书库扫描, 本地目录和版本信息.",
                 )
             }
             item {
@@ -143,7 +132,6 @@ fun SettingsScreen(
                     onRescan = viewModel::rescan,
                 )
             }
-            item { LocalFirstPanel() }
         }
     }
 }
@@ -182,26 +170,6 @@ private fun SettingsRow(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    if (action.enabled) {
-        ActionSettingsRow(
-            action = action,
-            modifier = modifier,
-            onClick = onClick,
-        )
-    } else {
-        PassiveSettingsRow(
-            action = action,
-            modifier = modifier,
-        )
-    }
-}
-
-@Composable
-private fun ActionSettingsRow(
-    action: SettingsAction,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
     var focused by remember { mutableStateOf(false) }
     val contentColor = if (focused) Color.Black else Color.White
     val iconContainer = if (focused) {
@@ -211,13 +179,17 @@ private fun ActionSettingsRow(
     }
 
     Surface(
-        onClick = onClick,
+        onClick = { if (action.enabled) onClick() },
         modifier = modifier
             .fillMaxWidth()
             .onFocusChanged { focused = it.hasFocus },
         shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.large),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (action.selected) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.055f),
+            containerColor = when {
+                action.selected -> Color.White.copy(alpha = 0.12f)
+                action.enabled -> Color.White.copy(alpha = 0.055f)
+                else -> Color.White.copy(alpha = 0.04f)
+            },
             contentColor = contentColor,
             focusedContainerColor = Color.White,
             focusedContentColor = Color.Black,
@@ -237,27 +209,6 @@ private fun ActionSettingsRow(
             iconContainer = iconContainer,
             titleAlpha = 1f,
             subtitleAlpha = if (focused) 0.72f else 0.62f,
-        )
-    }
-}
-
-@Composable
-private fun PassiveSettingsRow(
-    action: SettingsAction,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        colors = SurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.035f)),
-        shape = MaterialTheme.shapes.large,
-        border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)), shape = MaterialTheme.shapes.large),
-    ) {
-        SettingsRowContent(
-            action = action,
-            contentColor = Color.White,
-            iconContainer = Color.White.copy(alpha = 0.07f),
-            titleAlpha = 0.58f,
-            subtitleAlpha = 0.44f,
         )
     }
 }
@@ -307,49 +258,6 @@ private fun SettingsRowContent(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-        }
-    }
-}
-
-@Composable
-private fun LocalFirstPanel() {
-    SecondaryPanel {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(18.dp),
-        ) {
-            Surface(
-                modifier = Modifier.size(54.dp),
-                colors = SurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.10f)),
-                shape = MaterialTheme.shapes.medium,
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Storage,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(26.dp),
-                    )
-                }
-            }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-                Text(
-                    text = "本地优先",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = Color.White,
-                )
-                Text(
-                    text = "阅读内容和进度保存在电视本地, 无线传书仅在局域网内临时开放.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.62f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
         }
     }
 }
