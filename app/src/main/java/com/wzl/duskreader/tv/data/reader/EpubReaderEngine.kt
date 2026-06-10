@@ -108,10 +108,14 @@ class EpubReaderEngine(private val file: File) {
 
     private fun parseXml(bytes: ByteArray) = DocumentBuilderFactory.newInstance().apply {
         isNamespaceAware = false
-        setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-        setFeature("http://xml.org/sax/features/external-general-entities", false)
-        setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+        safeSetFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+        safeSetFeature("http://xml.org/sax/features/external-general-entities", false)
+        safeSetFeature("http://xml.org/sax/features/external-parameter-entities", false)
     }.newDocumentBuilder().parse(String(bytes, Charsets.UTF_8).trimStart().byteInputStream())
+
+    private fun DocumentBuilderFactory.safeSetFeature(name: String, value: Boolean) {
+        runCatching { setFeature(name, value) }
+    }
 
     private fun resolveZipPath(baseDir: String, href: String): String {
         val raw = href.substringBefore('#')

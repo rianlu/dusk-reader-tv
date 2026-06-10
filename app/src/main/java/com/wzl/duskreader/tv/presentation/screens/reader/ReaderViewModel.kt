@@ -187,27 +187,57 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
-    private suspend fun loadCurrentChapter() {
-        val ch = bookChapters.getOrNull(currentChapterIndexValue) ?: return
-        val cached = chapterTextCache.get(ch.chapterIndex)
-        currentChapterText = if (cached != null) {
-            cached
-        } else {
-            withContext(Dispatchers.IO) {
-                val raw = runCatching {
-                    readChapterText(ch)
-                }.getOrElse {
-                    Log.e(TAG, "读取章节失败 idx=${ch.chapterIndex}", it)
-                    ""
-                }
-                val formatted = formatChapterText(raw)
-                chapterTextCache.put(ch.chapterIndex, formatted)
-                formatted
+    private suspend fun loadCurrentChapter(direction: Int = 1) {
+        if (bookChapters.isEmpty()) return
+        val startIndex = currentChapterIndexValue.coerceIn(0, bookChapters.lastIndex)
+        val candidateIndexes = buildList {
+            add(startIndex)
+            if (direction >= 0) {
+                addAll((startIndex + 1)..bookChapters.lastIndex)
+                addAll((startIndex - 1) downTo 0)
+            } else {
+                addAll((startIndex - 1) downTo 0)
+                addAll((startIndex + 1)..bookChapters.lastIndex)
+            }
+        }.distinct()
+
+        var loadedIndex = startIndex
+        var loadedText = ""
+        for (index in candidateIndexes) {
+            val text = readFormattedChapter(index)
+            if (text.isNotBlank()) {
+                loadedIndex = index
+                loadedText = text
+                break
             }
         }
-        // 越界保护
+        if (loadedText.isBlank()) {
+            loadedText = "本章暂无可显示正文"
+        }
+        if (loadedIndex != currentChapterIndexValue) {
+            currentChapterIndexValue = loadedIndex
+            currentCharOffsetInChapter = 0
+        }
+        currentChapterText = loadedText
         if (currentCharOffsetInChapter > currentChapterText.length) {
             currentCharOffsetInChapter = 0
+        }
+    }
+
+    private suspend fun readFormattedChapter(chapterIndex: Int): String {
+        val ch = bookChapters.getOrNull(chapterIndex) ?: return ""
+        val cached = chapterTextCache.get(ch.chapterIndex)
+        if (cached != null) return cached
+        return withContext(Dispatchers.IO) {
+            val raw = runCatching {
+                readChapterText(ch)
+            }.getOrElse {
+                Log.e(TAG, "读取章节失败 idx=${ch.chapterIndex}", it)
+                ""
+            }
+            val formatted = formatChapterText(raw)
+            chapterTextCache.put(ch.chapterIndex, formatted)
+            formatted
         }
     }
 
@@ -319,7 +349,7 @@ class ReaderViewModel @Inject constructor(
         currentChapterIndexValue++
         currentCharOffsetInChapter = 0
         viewModelScope.launch {
-            loadCurrentChapter()
+            loadCurrentChapter(direction = 1)
             updateProgress()
             updateCurrentChapterTitle()
             requestPaging()
@@ -332,7 +362,7 @@ class ReaderViewModel @Inject constructor(
         if (currentChapterIndexValue <= 0) return
         currentChapterIndexValue--
         viewModelScope.launch {
-            loadCurrentChapter()
+            loadCurrentChapter(direction = -1)
             // 落点设到章节末，performPaging 会算出末页并触发 pendingPageIndex
             currentCharOffsetInChapter = (currentChapterText.length - 1).coerceAtLeast(0)
             updateProgress()
@@ -348,7 +378,7 @@ class ReaderViewModel @Inject constructor(
         currentChapterIndexValue = target
         currentCharOffsetInChapter = 0
         viewModelScope.launch {
-            loadCurrentChapter()
+            loadCurrentChapter(direction = 1)
             updateProgress()
             updateCurrentChapterTitle()
             requestPaging()
