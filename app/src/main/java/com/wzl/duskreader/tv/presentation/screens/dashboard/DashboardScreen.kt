@@ -233,7 +233,10 @@ private fun Body(
         composable(Screens.Home()) {
             BookshelfScreen(
                 onBookClick = { book -> openBookDetailsScreen(book.id) },
-                onGoTransfer = { navController.navigateTopLevel(Screens.Transfer) },
+                onGoTransfer = {
+                    onRequestContentFocus()
+                    navController.navigateTopLevel(Screens.Transfer)
+                },
                 onGoBookshelf = {
                     onRequestContentFocus()
                     navController.navigateTopLevel(Screens.Bookshelf)
@@ -247,7 +250,10 @@ private fun Body(
         composable(Screens.Bookshelf()) {
             BookshelfScreen(
                 onBookClick = { book -> openBookDetailsScreen(book.id) },
-                onGoTransfer = { navController.navigateTopLevel(Screens.Transfer) },
+                onGoTransfer = {
+                    onRequestContentFocus()
+                    navController.navigateTopLevel(Screens.Transfer)
+                },
                 onGoBookshelf = { },
                 onScroll = updateTopBarVisibility,
                 isTopBarVisible = isTopBarVisible,
@@ -256,7 +262,7 @@ private fun Body(
             )
         }
         composable(Screens.Transfer()) {
-            TransferScreen()
+            TransferScreen(requestInitialFocusVersion = contentFocusRequestVersion)
         }
         composable(Screens.Settings()) {
             SettingsScreen()

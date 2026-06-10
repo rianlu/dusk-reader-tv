@@ -29,14 +29,17 @@ import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -63,21 +66,52 @@ import java.util.Locale
 @Composable
 fun TransferScreen(
     modifier: Modifier = Modifier,
+    requestInitialFocusVersion: Long = 0L,
     viewModel: TransferScreenViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val childPadding = rememberChildPadding()
     val listState = rememberLazyListState()
-    val firstButtonRequester = remember { FocusRequester() }
     val clipboard = LocalClipboardManager.current
+    val primaryActionRequester = remember { FocusRequester() }
+    var handledFocusRequestVersion by rememberSaveable { mutableLongStateOf(0L) }
+    var actionFocusRequestVersion by rememberSaveable { mutableLongStateOf(0L) }
+    var handledActionFocusRequestVersion by rememberSaveable { mutableLongStateOf(0L) }
 
+    LaunchedEffect(requestInitialFocusVersion, state) {
+        if (requestInitialFocusVersion <= handledFocusRequestVersion) return@LaunchedEffect
+        when (state) {
+            TransferScreenUiState.Idle,
+            is TransferScreenUiState.Ready,
+            is TransferScreenUiState.Unavailable -> {
+                primaryActionRequester.requestFocus()
+                handledFocusRequestVersion = requestInitialFocusVersion
+            }
+            TransferScreenUiState.Loading -> Unit
+        }
+    }
+
+    LaunchedEffect(actionFocusRequestVersion, state) {
+        if (actionFocusRequestVersion <= handledActionFocusRequestVersion) return@LaunchedEffect
+        when (state) {
+            is TransferScreenUiState.Ready,
+            is TransferScreenUiState.Unavailable -> {
+                primaryActionRequester.requestFocus()
+                handledActionFocusRequestVersion = actionFocusRequestVersion
+            }
+            TransferScreenUiState.Idle,
+            TransferScreenUiState.Loading -> Unit
+        }
+    }
+
+    fun requestActionFocusAfterStateChange() {
+        actionFocusRequestVersion++
+    }
 
     DuskScreenBackground(modifier = modifier) {
         LazyColumn(
             state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .focusRestorer { firstButtonRequester },
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 start = childPadding.start,
                 end = childPadding.end,
@@ -96,8 +130,11 @@ fun TransferScreen(
             item {
                 when (val current = state) {
                     TransferScreenUiState.Idle -> TransferIdlePanel(
-                        buttonRequester = firstButtonRequester,
-                        onStart = viewModel::startTransfer,
+                        buttonRequester = primaryActionRequester,
+                        onStart = {
+                            requestActionFocusAfterStateChange()
+                            viewModel.startTransfer()
+                        },
                     )
 
                     TransferScreenUiState.Loading -> TransferLoadingPanel()
@@ -107,16 +144,22 @@ fun TransferScreen(
                         helperMessage = current.helperMessage,
                         qrCode = current.qrCode,
                         lastUploadText = formatLastUpload(current.lastUploadMessage, current.lastUploadAtMillis),
-                        buttonRequester = firstButtonRequester,
+                        buttonRequester = primaryActionRequester,
                         onCopyAddress = { clipboard.setText(AnnotatedString(current.url)) },
-                        onRefresh = viewModel::refresh,
+                        onRefresh = {
+                            requestActionFocusAfterStateChange()
+                            viewModel.refresh()
+                        },
                     )
 
                     is TransferScreenUiState.Unavailable -> TransferUnavailablePanel(
                         message = current.message,
                         lastUploadText = formatLastUpload(current.lastUploadMessage, current.lastUploadAtMillis),
-                        buttonRequester = firstButtonRequester,
-                        onRefresh = viewModel::refresh,
+                        buttonRequester = primaryActionRequester,
+                        onRefresh = {
+                            requestActionFocusAfterStateChange()
+                            viewModel.refresh()
+                        },
                     )
                 }
             }
