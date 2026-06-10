@@ -24,7 +24,7 @@ class TransferScreenViewModel @Inject constructor(
     private val fileTransferServer: FileTransferServer,
 ) : ViewModel() {
 
-    private val hasUserStarted = MutableStateFlow(false)
+    private val hasUserStarted = MutableStateFlow(fileTransferServer.snapshot.value.isRunning)
 
     val uiState: StateFlow<TransferScreenUiState> = combine(
         hasUserStarted,
