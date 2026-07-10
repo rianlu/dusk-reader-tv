@@ -23,6 +23,8 @@ class BookRepositoryImpl @Inject constructor(
         private const val TAG = "BookRepo"
         private val SUPPORTED_EXTENSIONS = setOf("txt", "epub")
         private const val BOOK_DIR_NAME = "暮阅"
+        private const val LEGACY_DEFAULT_BOOK_FILE_NAME = "欢迎使用暮阅.txt"
+        private const val LEGACY_DEFAULT_BOOK_CONTENT = "欢迎使用暮阅 (Dusk Reader TV)\n\n这是一个为您优化的电视阅读器。"
     }
 
     override fun getAllBooks(): Flow<List<Book>> = bookDao.getAllBooks()
@@ -40,44 +42,65 @@ class BookRepositoryImpl @Inject constructor(
     override suspend fun delete(book: Book) = bookDao.deleteBook(book)
 
     override suspend fun scanLocalStorage(): Int = withContext(Dispatchers.IO) {
-        ensureDefaultBookExists()
-        var importedCount = 0
-        val bookDir = resolveBookDir() ?: return@withContext 0
-        val files = bookDir.listFiles() ?: return@withContext 0
+        val bookDir = resolveBookDir(createIfMissing = true) ?: return@withContext 0
+        removeLegacyDefaultBook(bookDir)
+        val files = bookDir.listFiles()
+            ?.filter { it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS }
+            .orEmpty()
+        val existingBooks = bookDao.getAllBooksOnce()
+        val existingByPath = existingBooks.associateBy(Book::path)
+        val currentPaths = files.mapTo(hashSetOf(), File::getAbsolutePath)
+        val booksToInsert = mutableListOf<Book>()
+        val booksToUpdate = mutableListOf<Book>()
+
         for (file in files) {
-            if (!file.isFile || file.extension.lowercase() !in SUPPORTED_EXTENSIONS) continue
-            val existingBook = bookDao.getBookByPath(file.absolutePath)
-            val shouldRefreshCover = existingBook?.needsCoverRefresh() ?: true
-            val importedBook = buildImportedBook(file, allowNetworkCover = shouldRefreshCover)
+            val existingBook = existingByPath[file.absolutePath]
+            if (existingBook != null && existingBook.fileSize == file.length()) continue
+
+            val importedBook = buildImportedBook(
+                file = file,
+                allowNetworkCover = false,
+                allowGeneratedCover = false,
+            )
             if (existingBook == null) {
-                bookDao.insertBook(importedBook)
-                importedCount++
+                booksToInsert += importedBook
             } else {
                 val refreshedBook = existingBook.mergeImportedMetadata(importedBook)
                 if (refreshedBook != existingBook) {
-                    bookDao.updateBook(refreshedBook)
+                    booksToUpdate += refreshedBook
                 }
             }
         }
-        android.util.Log.d(TAG, "scan done: dir=$bookDir, files=${files.size}, imported=$importedCount")
+
+        val staleBooks = existingBooks.filter { book ->
+            book.path.startsWith(bookDir.absolutePath + File.separator) && book.path !in currentPaths
+        }
+        val importedCount = if (booksToInsert.isEmpty()) {
+            0
+        } else {
+            bookDao.insertBooks(booksToInsert).count { it > 0 }
+        }
+        if (booksToUpdate.isNotEmpty()) bookDao.updateBooks(booksToUpdate)
+        if (staleBooks.isNotEmpty()) bookDao.deleteBooks(staleBooks)
+
+        android.util.Log.d(
+            TAG,
+            "scan done: dir=$bookDir, files=${files.size}, imported=$importedCount, " +
+                "updated=${booksToUpdate.size}, removed=${staleBooks.size}",
+        )
         importedCount
     }
 
-    private suspend fun ensureDefaultBookExists() = withContext(Dispatchers.IO) {
-        val bookDir = resolveBookDir(createIfMissing = true) ?: return@withContext
-        val defaultFile = File(bookDir, "欢迎使用暮阅.txt")
-        if (!defaultFile.exists()) {
-            runCatching {
-                defaultFile.writeText("欢迎使用暮阅 (Dusk Reader TV)\n\n这是一个为您优化的电视阅读器。")
-            }
-        }
-        if (bookDao.getBookByPath(defaultFile.absolutePath) == null) {
-            bookDao.insertBook(buildImportedBook(defaultFile).copy(title = "欢迎使用暮阅"))
-        }
-    }
-
-    private fun buildImportedBook(file: File, allowNetworkCover: Boolean = true): Book {
-        val metadata = metadataResolver.resolve(file, allowNetworkCover = allowNetworkCover)
+    private fun buildImportedBook(
+        file: File,
+        allowNetworkCover: Boolean = true,
+        allowGeneratedCover: Boolean = true,
+    ): Book {
+        val metadata = metadataResolver.resolve(
+            file = file,
+            allowNetworkCover = allowNetworkCover,
+            allowGeneratedCover = allowGeneratedCover,
+        )
         return Book(
             title = metadata.title ?: file.nameWithoutExtension,
             author = metadata.author,
@@ -92,6 +115,23 @@ class BookRepositoryImpl @Inject constructor(
             fileSize = file.length(),
             totalSize = file.length(),
         )
+    }
+
+    private suspend fun removeLegacyDefaultBook(bookDir: File) {
+        val legacyFile = File(bookDir, LEGACY_DEFAULT_BOOK_FILE_NAME)
+        val existingBook = bookDao.getBookByPath(legacyFile.absolutePath)
+        if (!legacyFile.isFile) {
+            existingBook?.let { bookDao.deleteBook(it) }
+            return
+        }
+        val isAppGenerated = runCatching {
+            legacyFile.readText(Charsets.UTF_8) == LEGACY_DEFAULT_BOOK_CONTENT
+        }.getOrDefault(false)
+        if (!isAppGenerated) return
+
+        if (legacyFile.delete()) {
+            existingBook?.let { bookDao.deleteBook(it) }
+        }
     }
 
     private fun Book.mergeImportedMetadata(imported: Book): Book {

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,6 +72,7 @@ private enum class SettingsActionType {
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
+    requestInitialFocusVersion: Long = 0L,
     viewModel: SettingsScreenViewModel = hiltViewModel(),
 ) {
     val rescanState by viewModel.rescanState.collectAsStateWithLifecycle()
@@ -104,6 +106,10 @@ fun SettingsScreen(
         )
     }
 
+    LaunchedEffect(requestInitialFocusVersion) {
+        if (requestInitialFocusVersion > 0) firstItemRequester.requestFocus()
+    }
+
     DuskScreenBackground(modifier = modifier) {
         LazyColumn(
             state = listState,
@@ -113,10 +119,10 @@ fun SettingsScreen(
             contentPadding = PaddingValues(
                 start = childPadding.start,
                 end = childPadding.end,
-                top = 96.dp,
+                top = 34.dp,
                 bottom = 108.dp,
             ),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             item {
                 PageHeader(
@@ -146,8 +152,8 @@ private fun SettingsPanel(
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
                 text = "设置项目",
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                color = Color.White,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = Color.White.copy(alpha = 0.92f),
             )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 actions.forEachIndexed { index, action ->
@@ -180,6 +186,7 @@ private fun SettingsRow(
 
     Surface(
         onClick = { if (action.enabled) onClick() },
+        enabled = action.enabled,
         modifier = modifier
             .fillMaxWidth()
             .onFocusChanged { focused = it.hasFocus },
@@ -201,7 +208,7 @@ private fun SettingsRow(
             ),
             focusedBorder = Border(BorderStroke(2.dp, Color.White), shape = MaterialTheme.shapes.large),
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
     ) {
         SettingsRowContent(
             action = action,
@@ -222,21 +229,24 @@ private fun SettingsRowContent(
     subtitleAlpha: Float,
 ) {
     Row(
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+        modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Surface(
-            modifier = Modifier.size(44.dp),
+            modifier = Modifier.size(40.dp),
             colors = SurfaceDefaults.colors(containerColor = iconContainer),
             shape = MaterialTheme.shapes.medium,
         ) {
-            Box(contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
                 Icon(
                     imageVector = action.icon,
                     contentDescription = null,
                     tint = contentColor.copy(alpha = titleAlpha),
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(20.dp),
                 )
             }
         }
@@ -246,14 +256,14 @@ private fun SettingsRowContent(
         ) {
             Text(
                 text = action.title,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                 color = contentColor.copy(alpha = titleAlpha),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = action.subtitle,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = contentColor.copy(alpha = subtitleAlpha),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -294,22 +304,22 @@ private fun PageHeader(
     title: String,
     subtitle: String,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             text = eyebrow,
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = Color.White.copy(alpha = 0.52f),
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = Color.White.copy(alpha = 0.50f),
         )
         Text(
             text = title,
-            style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
-            color = Color.White,
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = Color.White.copy(alpha = 0.92f),
         )
         Text(
             text = subtitle,
             modifier = Modifier.widthIn(max = 760.dp),
-            style = MaterialTheme.typography.bodyLarge,
-            color = Color.White.copy(alpha = 0.64f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White.copy(alpha = 0.60f),
         )
     }
 }

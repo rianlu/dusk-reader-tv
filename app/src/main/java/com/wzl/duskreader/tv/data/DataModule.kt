@@ -24,7 +24,7 @@ object DataModule {
         Room.databaseBuilder(context, AppDatabase::class.java, "dusk_reader_database")
             .addMigrations(AppDatabaseMigrations.MIGRATION_3_4, AppDatabaseMigrations.MIGRATION_4_5)
             .fallbackToDestructiveMigration()
-            .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+            .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
             .build()
 
     @Provides

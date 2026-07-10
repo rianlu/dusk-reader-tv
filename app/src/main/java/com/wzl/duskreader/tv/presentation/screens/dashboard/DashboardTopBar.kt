@@ -22,13 +22,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
@@ -56,9 +54,9 @@ fun DashboardTopBar(
     selectedTabIndex: Int,
     screens: List<Screens> = TopBarTabs,
     focusRequesters: List<FocusRequester> = remember { TopBarFocusRequesters },
+    onContentFocusRequest: () -> Unit,
     onScreenSelection: (screen: Screens) -> Unit,
 ) {
-    val focusManager = LocalFocusManager.current
     val sectionLabel = screens.getOrNull(selectedTabIndex)?.sectionLabel() ?: "本地书库"
     Box(modifier = modifier) {
         Surface(
@@ -114,7 +112,7 @@ fun DashboardTopBar(
                                         .focusRequester(focusRequesters[index]),
                                     selected = index == selectedTabIndex,
                                     onFocus = { onScreenSelection(screen) },
-                                    onClick = { focusManager.moveFocus(FocusDirection.Down) },
+                                    onClick = onContentFocusRequest,
                                 ) {
                                     TabContent(screen = screen)
                                 }

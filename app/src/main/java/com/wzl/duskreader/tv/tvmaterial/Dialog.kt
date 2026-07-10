@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -159,7 +160,13 @@ fun StandardDialog(
                 CompositionLocalProvider(
                     LocalContentColor provides iconContentColor,
                     content = {
-                        nnIcon()
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .wrapContentWidth(Alignment.CenterHorizontally),
+                        ) {
+                            nnIcon()
+                        }
                         Spacer(
                             modifier = Modifier.padding(StandardDialogDefaults.IconBottomSpacing)
                         )

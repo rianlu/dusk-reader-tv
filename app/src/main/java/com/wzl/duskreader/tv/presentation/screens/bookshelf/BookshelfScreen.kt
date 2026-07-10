@@ -6,9 +6,11 @@
 
 package com.wzl.duskreader.tv.presentation.screens.bookshelf
 
+import android.view.KeyEvent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,8 +31,14 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.FilterAlt
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -47,7 +55,12 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -61,19 +74,18 @@ import androidx.tv.material3.Text
 import com.wzl.duskreader.tv.data.entities.Book
 import com.wzl.duskreader.tv.data.entities.BookList
 import com.wzl.duskreader.tv.data.entities.BookKind
-import com.wzl.duskreader.tv.data.entities.hasGeneratedCover
-import com.wzl.duskreader.tv.data.entities.hasOpenDataCover
 import com.wzl.duskreader.tv.data.entities.kind
 import com.wzl.duskreader.tv.data.entities.hasReadingHistory
 import com.wzl.duskreader.tv.data.entities.progressRatio
 import com.wzl.duskreader.tv.presentation.common.BookCover
 import com.wzl.duskreader.tv.presentation.common.DuskTvButton
+import com.wzl.duskreader.tv.presentation.common.DuskTvButtonStyle
 import com.wzl.duskreader.tv.presentation.screens.dashboard.rememberChildPadding
+import com.wzl.duskreader.tv.tvmaterial.StandardDialog
 
 private const val HOME_TOP_BAR_HIDE_THRESHOLD_PX = 300
 private const val LIBRARY_TOP_BAR_HIDE_THRESHOLD_PX = 100
 private const val LIBRARY_GRID_COLUMNS = 5
-private const val LIBRARY_LIMIT = 240
 private val BOOK_POSTER_ASPECT_RATIO = 3f / 4f
 
 enum class BookshelfScreenMode {
@@ -89,7 +101,7 @@ fun BookshelfScreen(
     onScroll: (isTopBarVisible: Boolean) -> Unit,
     isTopBarVisible: Boolean,
     mode: BookshelfScreenMode = BookshelfScreenMode.Home,
-    requestInitialFocus: Boolean = false,
+    requestInitialFocusVersion: Long = 0L,
     viewModel: BookshelfScreenViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -99,7 +111,8 @@ fun BookshelfScreen(
             is BookshelfUiState.Loading -> Unit
             is BookshelfUiState.Ready -> {
                 if (state.allBooks.isEmpty()) {
-                    EmptyBookshelf(onGoTransfer = onGoTransfer)
+                    LaunchedEffect(mode) { onScroll(true) }
+                    EmptyBookshelf(mode = mode)
                 } else {
                     when (mode) {
                         BookshelfScreenMode.Home -> HomeBookshelf(
@@ -108,15 +121,21 @@ fun BookshelfScreen(
                             onBookClick = onBookClick,
                             onScroll = onScroll,
                             isTopBarVisible = isTopBarVisible,
-                            requestInitialFocus = requestInitialFocus,
+                            requestInitialFocusVersion = requestInitialFocusVersion,
                         )
 
                         BookshelfScreenMode.Library -> LibraryBookshelf(
                             allBooks = state.allBooks,
+                            libraryBooks = state.libraryBooks,
+                            searchQuery = state.searchQuery,
+                            formatFilter = state.formatFilter,
+                            librarySort = state.librarySort,
                             onBookClick = onBookClick,
+                            onSearchQueryChange = viewModel::updateSearchQuery,
+                            onCycleFormatFilter = viewModel::cycleFormatFilter,
+                            onCycleLibrarySort = viewModel::cycleLibrarySort,
                             onScroll = onScroll,
-                            isTopBarVisible = isTopBarVisible,
-                            requestInitialFocus = requestInitialFocus,
+                            requestInitialFocusVersion = requestInitialFocusVersion,
                         )
                     }
                 }
@@ -132,7 +151,7 @@ private fun HomeBookshelf(
     onBookClick: (book: Book) -> Unit,
     onScroll: (isTopBarVisible: Boolean) -> Unit,
     isTopBarVisible: Boolean,
-    requestInitialFocus: Boolean,
+    requestInitialFocusVersion: Long,
 ) {
     val childPadding = rememberChildPadding()
     val listState = rememberLazyListState()
@@ -150,8 +169,8 @@ private fun HomeBookshelf(
     LaunchedEffect(isTopBarVisible) {
         if (isTopBarVisible) listState.animateScrollToItem(0)
     }
-    LaunchedEffect(requestInitialFocus) {
-        if (requestInitialFocus) startRequester.requestFocus()
+    LaunchedEffect(requestInitialFocusVersion) {
+        if (requestInitialFocusVersion > 0) startRequester.requestFocus()
     }
 
     LazyColumn(
@@ -180,18 +199,25 @@ private fun HomeBookshelf(
 @Composable
 private fun LibraryBookshelf(
     allBooks: BookList,
+    libraryBooks: BookList,
+    searchQuery: String,
+    formatFilter: LibraryFormatFilter,
+    librarySort: LibrarySort,
     onBookClick: (book: Book) -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onCycleFormatFilter: () -> Unit,
+    onCycleLibrarySort: () -> Unit,
     onScroll: (isTopBarVisible: Boolean) -> Unit,
-    isTopBarVisible: Boolean,
-    requestInitialFocus: Boolean,
+    requestInitialFocusVersion: Long,
 ) {
     val childPadding = rememberChildPadding()
     val gridState = rememberLazyGridState()
+    val searchRequester = remember { FocusRequester() }
+    val filterRequester = remember { FocusRequester() }
+    val sortRequester = remember { FocusRequester() }
     val firstBookRequester = remember { FocusRequester() }
     var gridHasFocus by remember { mutableStateOf(false) }
-    val sortedBooks = remember(allBooks) {
-        allBooks.sortedByDescending { it.importedAt }.take(LIBRARY_LIMIT)
-    }
+    var showSearchDialog by remember { mutableStateOf(false) }
 
     val shouldShowTopBar by remember {
         derivedStateOf {
@@ -202,14 +228,28 @@ private fun LibraryBookshelf(
     LaunchedEffect(shouldShowTopBar, gridHasFocus) {
         onScroll(shouldShowTopBar && !gridHasFocus)
     }
-    LaunchedEffect(requestInitialFocus) {
-        if (requestInitialFocus) firstBookRequester.requestFocus()
+    LaunchedEffect(requestInitialFocusVersion) {
+        if (requestInitialFocusVersion > 0) searchRequester.requestFocus()
+    }
+    LaunchedEffect(libraryBooks.isEmpty(), showSearchDialog) {
+        if (libraryBooks.isEmpty() && !showSearchDialog) searchRequester.requestFocus()
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        LibraryHeader(
+        LibraryToolbar(
             books = allBooks,
-            shownCount = sortedBooks.size,
+            shownCount = libraryBooks.size,
+            searchQuery = searchQuery,
+            formatFilter = formatFilter,
+            librarySort = librarySort,
+            searchRequester = searchRequester,
+            filterRequester = filterRequester,
+            sortRequester = sortRequester,
+            firstBookRequester = firstBookRequester,
+            hasResults = libraryBooks.isNotEmpty(),
+            onSearchClick = { showSearchDialog = true },
+            onCycleFormatFilter = onCycleFormatFilter,
+            onCycleLibrarySort = onCycleLibrarySort,
             modifier = Modifier.padding(
                 start = childPadding.start,
                 end = childPadding.end,
@@ -217,6 +257,18 @@ private fun LibraryBookshelf(
                 bottom = 8.dp,
             ),
         )
+        if (libraryBooks.isEmpty()) {
+            EmptyLibraryResults(
+                hasSearch = searchQuery.isNotBlank(),
+                hasFormatFilter = formatFilter != LibraryFormatFilter.All,
+                modifier = Modifier.padding(
+                    start = childPadding.start,
+                    end = childPadding.end,
+                    top = 56.dp,
+                ),
+            )
+            return@Column
+        }
         LazyVerticalGrid(
             columns = GridCells.Fixed(LIBRARY_GRID_COLUMNS),
             state = gridState,
@@ -233,7 +285,7 @@ private fun LibraryBookshelf(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            gridItemsIndexed(sortedBooks, key = { _, book -> book.id }) { index, book ->
+            gridItemsIndexed(libraryBooks, key = { _, book -> book.id }) { index, book ->
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -249,6 +301,17 @@ private fun LibraryBookshelf(
                                 if (index % LIBRARY_GRID_COLUMNS == 0) {
                                     left = FocusRequester.Cancel
                                 }
+                                if (index % LIBRARY_GRID_COLUMNS == LIBRARY_GRID_COLUMNS - 1 ||
+                                    index == libraryBooks.lastIndex
+                                ) {
+                                    right = FocusRequester.Cancel
+                                }
+                                if (index < LIBRARY_GRID_COLUMNS) {
+                                    up = searchRequester
+                                }
+                                if (index + LIBRARY_GRID_COLUMNS > libraryBooks.lastIndex) {
+                                    down = FocusRequester.Cancel
+                                }
                             },
                         onClick = { onBookClick(book) },
                     )
@@ -256,6 +319,13 @@ private fun LibraryBookshelf(
             }
         }
     }
+
+    LibrarySearchDialog(
+        showDialog = showSearchDialog,
+        query = searchQuery,
+        onQueryChange = onSearchQueryChange,
+        onDismissRequest = { showSearchDialog = false },
+    )
 }
 
 @Composable
@@ -318,25 +388,201 @@ private fun ContinueReadingHero(
 }
 
 @Composable
-private fun LibraryHeader(
+private fun LibraryToolbar(
     books: BookList,
     shownCount: Int,
+    searchQuery: String,
+    formatFilter: LibraryFormatFilter,
+    librarySort: LibrarySort,
+    searchRequester: FocusRequester,
+    filterRequester: FocusRequester,
+    sortRequester: FocusRequester,
+    firstBookRequester: FocusRequester,
+    hasResults: Boolean,
+    onSearchClick: () -> Unit,
+    onCycleFormatFilter: () -> Unit,
+    onCycleLibrarySort: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val totalCount = books.size
-    val txtCount = books.count { it.kind() == BookKind.Novel }
-    val epubCount = books.count { it.kind() == BookKind.Epub }
-    val openCoverCount = books.count { it.hasOpenDataCover() }
-    val generatedCoverCount = books.count { it.hasGeneratedCover() }
-    val shownText = if (totalCount == shownCount) "最近导入" else "显示 $shownCount 本 · 最近导入"
-    val summary = "共 $totalCount 本 · TXT $txtCount · EPUB $epubCount · 开放源 $openCoverCount · 生成 $generatedCoverCount · $shownText"
-    Text(
-        text = summary,
+    val (txtCount, epubCount) = remember(books) {
+        books.count { it.kind() == BookKind.Novel } to books.count { it.kind() == BookKind.Epub }
+    }
+    val searchLabel = if (searchQuery.isBlank()) "搜索书名或作者" else "搜索: ${searchQuery.take(12)}"
+
+    Column(
         modifier = modifier.fillMaxWidth(),
-        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-        color = Color.White.copy(alpha = 0.58f),
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            modifier = Modifier.focusGroup(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            DuskTvButton(
+                text = searchLabel,
+                icon = Icons.Outlined.Search,
+                style = DuskTvButtonStyle.Secondary,
+                onClick = onSearchClick,
+                modifier = Modifier
+                    .focusRequester(searchRequester)
+                    .focusProperties {
+                        right = filterRequester
+                        down = if (hasResults) firstBookRequester else FocusRequester.Cancel
+                    },
+            )
+            DuskTvButton(
+                text = formatFilter.label,
+                icon = Icons.Outlined.FilterAlt,
+                style = DuskTvButtonStyle.Secondary,
+                onClick = onCycleFormatFilter,
+                modifier = Modifier
+                    .focusRequester(filterRequester)
+                    .focusProperties {
+                        left = searchRequester
+                        right = sortRequester
+                        down = if (hasResults) firstBookRequester else FocusRequester.Cancel
+                    },
+            )
+            DuskTvButton(
+                text = librarySort.label,
+                icon = Icons.AutoMirrored.Outlined.Sort,
+                style = DuskTvButtonStyle.Secondary,
+                onClick = onCycleLibrarySort,
+                modifier = Modifier
+                    .focusRequester(sortRequester)
+                    .focusProperties {
+                        left = filterRequester
+                        right = FocusRequester.Cancel
+                        down = if (hasResults) firstBookRequester else FocusRequester.Cancel
+                    },
+            )
+        }
+        Text(
+            text = "共 ${books.size} 本 · TXT $txtCount · EPUB $epubCount · 当前显示 $shownCount 本",
+            modifier = Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+            color = Color.White.copy(alpha = 0.58f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun EmptyLibraryResults(
+    hasSearch: Boolean,
+    hasFormatFilter: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = "没有找到匹配的书籍",
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = Color.White.copy(alpha = 0.86f),
+        )
+        Text(
+            text = if (hasSearch || hasFormatFilter) "请调整搜索内容或格式筛选。" else "书库暂无可显示内容。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White.copy(alpha = 0.58f),
+        )
+    }
+}
+
+@Composable
+private fun LibrarySearchDialog(
+    showDialog: Boolean,
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onDismissRequest: () -> Unit,
+) {
+    val inputRequester = remember { FocusRequester() }
+    val confirmRequester = remember { FocusRequester() }
+    var inputFocused by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showDialog) {
+        if (showDialog) inputRequester.requestFocus()
+    }
+
+    StandardDialog(
+        showDialog = showDialog,
+        onDismissRequest = onDismissRequest,
+        title = { Text("搜索书库") },
+        text = {
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(inputRequester)
+                    .onFocusChanged { inputFocused = it.hasFocus }
+                    .focusProperties {
+                        left = FocusRequester.Cancel
+                        right = FocusRequester.Cancel
+                    }
+                    .onPreviewKeyEvent { event ->
+                        when (event.nativeKeyEvent.keyCode) {
+                            KeyEvent.KEYCODE_DPAD_DOWN,
+                            KeyEvent.KEYCODE_SYSTEM_NAVIGATION_DOWN -> {
+                                if (event.type == KeyEventType.KeyDown) confirmRequester.requestFocus()
+                                true
+                            }
+
+                            KeyEvent.KEYCODE_BACK -> {
+                                if (event.type == KeyEventType.KeyUp) onDismissRequest()
+                                true
+                            }
+
+                            else -> false
+                        }
+                    }
+                    .border(
+                        width = 2.dp,
+                        color = if (inputFocused) Color.White else Color.White.copy(alpha = 0.18f),
+                        shape = MaterialTheme.shapes.large,
+                    )
+                    .background(Color.White.copy(alpha = 0.08f), MaterialTheme.shapes.large)
+                    .padding(horizontal = 18.dp, vertical = 15.dp),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.titleMedium.copy(color = Color.White),
+                cursorBrush = SolidColor(Color.White),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { onDismissRequest() }),
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (query.isBlank()) {
+                            Text(
+                                text = "输入书名或作者",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White.copy(alpha = 0.42f),
+                            )
+                        }
+                        innerTextField()
+                    }
+                },
+            )
+        },
+        confirmButton = {
+            DuskTvButton(
+                text = "完成",
+                onClick = onDismissRequest,
+                modifier = Modifier
+                    .focusRequester(confirmRequester)
+                    .focusProperties { up = inputRequester },
+            )
+        },
+        dismissButton = if (query.isNotBlank()) {
+            {
+                DuskTvButton(
+                    text = "清除",
+                    style = DuskTvButtonStyle.Secondary,
+                    onClick = { onQueryChange("") },
+                )
+            }
+        } else {
+            null
+        },
     )
 }
 
@@ -464,59 +710,38 @@ private fun BookStatusChip(
 
 @Composable
 private fun EmptyBookshelf(
-    onGoTransfer: () -> Unit,
+    mode: BookshelfScreenMode,
 ) {
     val childPadding = rememberChildPadding()
-    val transferRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { transferRequester.requestFocus() }
+    val title = if (mode == BookshelfScreenMode.Home) "书库暂无内容" else "书库还是空的"
+    val message = if (mode == BookshelfScreenMode.Home) {
+        "可以从顶部导航进入管理页, 用手机或电脑上传 TXT / EPUB。"
+    } else {
+        "导入 TXT / EPUB 后, 这里会显示最近导入的书籍。"
+    }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = childPadding.start, vertical = 44.dp),
-        contentAlignment = Alignment.Center,
+            .padding(
+                start = childPadding.start,
+                end = childPadding.end,
+                top = 118.dp,
+                bottom = 108.dp,
+            ),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Surface(
-            colors = SurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.08f)),
-            shape = MaterialTheme.shapes.extraLarge,
-            border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)), shape = MaterialTheme.shapes.extraLarge),
-        ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 44.dp, vertical = 38.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                Surface(
-                    modifier = Modifier.size(58.dp),
-                    colors = SurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.12f)),
-                    shape = MaterialTheme.shapes.large,
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(text = "书", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                    }
-                }
-                Text(
-                    text = "书库还没有书",
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = Color.White,
-                )
-                Text(
-                    text = "通过局域网书库管理导入 TXT / EPUB, 本地目录扫描可在设置页执行.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.68f),
-                )
-                Row(
-                    modifier = Modifier.focusGroup(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    DuskTvButton(
-                        text = "去管理",
-                        modifier = Modifier.focusRequester(transferRequester),
-                        onClick = onGoTransfer,
-                    )
-                }
-            }
-        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = Color.White.copy(alpha = 0.86f),
+        )
+        Text(
+            text = message,
+            modifier = Modifier.widthIn(max = 560.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White.copy(alpha = 0.58f),
+        )
     }
 }
 

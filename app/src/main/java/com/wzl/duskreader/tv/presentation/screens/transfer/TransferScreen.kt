@@ -107,10 +107,10 @@ fun TransferScreen(
                 .padding(
                     start = childPadding.start,
                     end = childPadding.end,
-                    top = 8.dp,
-                    bottom = 24.dp,
+                    top = 34.dp,
+                    bottom = 108.dp,
                 ),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             PageHeader(
                 eyebrow = "局域网管理",
@@ -172,12 +172,12 @@ private fun TransferIdlePanel(
             ) {
                 Text(
                     text = "开启书库管理服务",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = Color.White,
                 )
                 Text(
                     text = "启动后可用电脑或手机浏览器上传, 查看和删除本地书籍.",
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.66f),
                 )
             }
@@ -199,12 +199,12 @@ private fun TransferLoadingPanel() {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
                 text = "正在启动管理服务",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                 color = Color.White,
             )
             Text(
                 text = "请稍等, 系统正在获取电视当前局域网地址.",
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.66f),
             )
         }
@@ -270,12 +270,12 @@ private fun TransferUnavailablePanel(
             ) {
                 Text(
                     text = "无法开启管理服务",
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = Color.White,
                 )
                 Text(
                     text = message,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.66f),
                 )
                 lastUploadText?.let {
@@ -318,7 +318,7 @@ private fun AddressBlock(url: String, lastUploadText: String?) {
             )
             Text(
                 text = url,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -339,7 +339,7 @@ private fun AddressBlock(url: String, lastUploadText: String?) {
 @Composable
 private fun QrCodePanel(qrCode: Bitmap) {
     Surface(
-        modifier = Modifier.size(230.dp),
+        modifier = Modifier.size(216.dp),
         colors = SurfaceDefaults.colors(containerColor = Color.White),
         shape = RoundedCornerShape(30.dp),
     ) {
@@ -351,7 +351,7 @@ private fun QrCodePanel(qrCode: Bitmap) {
                 bitmap = qrCode.asImageBitmap(),
                 contentDescription = "书库管理二维码",
                 modifier = Modifier
-                    .size(190.dp)
+                    .size(178.dp)
                     .clip(RoundedCornerShape(10.dp)),
             )
         }
@@ -387,12 +387,12 @@ private fun StatusLine(
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                 color = Color.White,
             )
             Text(
                 text = subtitle,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.64f),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -404,17 +404,20 @@ private fun StatusLine(
 @Composable
 private fun TransferGlyph() {
     Surface(
-        modifier = Modifier.size(88.dp),
+        modifier = Modifier.size(72.dp),
         colors = SurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.10f)),
         shape = MaterialTheme.shapes.extraLarge,
         border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)), shape = MaterialTheme.shapes.extraLarge),
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
             Icon(
                 imageVector = Icons.Default.UploadFile,
                 contentDescription = null,
                 tint = Color.White,
-                modifier = Modifier.size(42.dp),
+                modifier = Modifier.size(34.dp),
             )
         }
     }
@@ -427,7 +430,7 @@ private fun PrimaryPanel(content: @Composable () -> Unit) {
         shape = MaterialTheme.shapes.extraLarge,
         border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)), shape = MaterialTheme.shapes.extraLarge),
     ) {
-        Box(modifier = Modifier.padding(horizontal = 36.dp, vertical = 30.dp)) {
+        Box(modifier = Modifier.padding(horizontal = 30.dp, vertical = 24.dp)) {
             content()
         }
     }
@@ -439,22 +442,22 @@ private fun PageHeader(
     title: String,
     subtitle: String,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             text = eyebrow,
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = Color.White.copy(alpha = 0.52f),
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = Color.White.copy(alpha = 0.50f),
         )
         Text(
             text = title,
-            style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
-            color = Color.White,
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = Color.White.copy(alpha = 0.92f),
         )
         Text(
             text = subtitle,
             modifier = Modifier.widthIn(max = 760.dp),
-            style = MaterialTheme.typography.bodyLarge,
-            color = Color.White.copy(alpha = 0.64f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White.copy(alpha = 0.60f),
         )
     }
 }

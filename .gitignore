@@ -13,6 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+keystore.properties
+*.jks
+*.keystore
 .worktrees/
 .reference_tv_samples/
 .kotlin/

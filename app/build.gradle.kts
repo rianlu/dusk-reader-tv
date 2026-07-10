@@ -13,6 +13,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import java.util.Properties
+
+val betaSigningPropertiesFile = rootProject.file("keystore.properties")
+val betaSigningProperties = Properties().apply {
+    if (betaSigningPropertiesFile.isFile) {
+        betaSigningPropertiesFile.inputStream().use(::load)
+    }
+}
+
+fun betaSigningProperty(name: String): String? =
+    betaSigningProperties.getProperty(name)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(name)?.takeIf { it.isNotBlank() }
+
+val betaStoreFile = betaSigningProperty("BETA_STORE_FILE")?.let { rootProject.file(it) }
+val hasBetaSigningConfig = betaStoreFile?.isFile == true &&
+    listOf("BETA_STORE_PASSWORD", "BETA_KEY_ALIAS", "BETA_KEY_PASSWORD").all {
+        betaSigningProperty(it) != null
+    }
+
+if (gradle.startParameter.taskNames.any { it.contains("beta", ignoreCase = true) } && !hasBetaSigningConfig) {
+    throw GradleException(
+        "Missing beta signing config. Copy keystore.properties.example to keystore.properties " +
+            "or set BETA_STORE_FILE, BETA_STORE_PASSWORD, BETA_KEY_ALIAS, and BETA_KEY_PASSWORD."
+    )
+}
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -44,6 +70,15 @@ android {
         }
     }
 
+    signingConfigs {
+        create("beta") {
+            storeFile = betaStoreFile
+            storePassword = betaSigningProperty("BETA_STORE_PASSWORD")
+            keyAlias = betaSigningProperty("BETA_KEY_ALIAS")
+            keyPassword = betaSigningProperty("BETA_KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         getByName("release") {
             isMinifyEnabled = true
@@ -52,6 +87,17 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        create("beta") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".beta"
+            versionNameSuffix = "-beta.1"
+            isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("beta")
+            matchingFallbacks += listOf("release")
+            resValue("string", "app_name", "暮阅 Beta")
         }
     }
     buildFeatures {
@@ -100,10 +146,6 @@ dependencies {
 
     // JSON parser
     implementation(libs.kotlinx.serialization)
-
-    // Media3
-    implementation(libs.androidx.media3.exoplayer)
-    implementation(libs.androidx.media3.ui)
 
     // SplashScreen
     implementation(libs.androidx.core.splashscreen)

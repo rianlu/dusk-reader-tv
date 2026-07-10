@@ -24,7 +24,6 @@ fun BookCover(
         AsyncImage(
             modifier = modifier,
             model = ImageRequest.Builder(LocalContext.current)
-                .crossfade(true)
                 .data(coverPath)
                 .build(),
             contentDescription = book.title,

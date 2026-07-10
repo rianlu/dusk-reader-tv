@@ -14,6 +14,9 @@ interface BookDao {
     @Query("SELECT * FROM books ORDER BY lastReadTime DESC")
     fun getAllBooks(): Flow<List<Book>>
 
+    @Query("SELECT * FROM books")
+    suspend fun getAllBooksOnce(): List<Book>
+
     // 获取最近阅读的若干本书（章节级架构：lastReadChapter 或 lastReadPosition 任一非零都算）
     @Query(
         "SELECT * FROM books WHERE lastReadChapter > 0 OR lastReadPosition > 0 " +
@@ -33,11 +36,20 @@ interface BookDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertBook(book: Book): Long
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertBooks(books: List<Book>): List<Long>
+
     // 更新书籍信息（主要用于同步进度和更新阅读时间）
     @Update
     suspend fun updateBook(book: Book)
 
+    @Update
+    suspend fun updateBooks(books: List<Book>)
+
     // 从书架移除一本书
     @Delete
     suspend fun deleteBook(book: Book)
+
+    @Delete
+    suspend fun deleteBooks(books: List<Book>)
 }

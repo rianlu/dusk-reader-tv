@@ -178,7 +178,10 @@ private fun PermissionRequiredScreen(
                         containerColor = Color.White.copy(alpha = 0.10f),
                     ),
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Security,
                             contentDescription = null,

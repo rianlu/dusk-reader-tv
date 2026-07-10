@@ -155,12 +155,14 @@ fun DashboardScreen(
                     bottom = ParentPadding.calculateBottomPadding()
                 ),
             selectedTabIndex = currentTopBarSelectedTabIndex,
-        ) { screen ->
-            val targetRoute = screen()
-            if (currentDestination != targetRoute) {
-                navController.navigateTopLevel(screen)
-            }
-        }
+            onContentFocusRequest = { contentFocusRequestVersion++ },
+            onScreenSelection = { screen ->
+                val targetRoute = screen()
+                if (currentDestination != targetRoute) {
+                    navController.navigateTopLevel(screen)
+                }
+            },
+        )
 
         Body(
             openBookDetailsScreen = openBookDetailsScreen,
@@ -244,7 +246,7 @@ private fun Body(
                 onScroll = updateTopBarVisibility,
                 isTopBarVisible = isTopBarVisible,
                 mode = BookshelfScreenMode.Home,
-                requestInitialFocus = false,
+                requestInitialFocusVersion = contentFocusRequestVersion,
             )
         }
         composable(Screens.Bookshelf()) {
@@ -258,13 +260,13 @@ private fun Body(
                 onScroll = updateTopBarVisibility,
                 isTopBarVisible = isTopBarVisible,
                 mode = BookshelfScreenMode.Library,
-                requestInitialFocus = contentFocusRequestVersion > 0,
+                requestInitialFocusVersion = contentFocusRequestVersion,
             )
         }
         composable(Screens.Transfer()) {
             TransferScreen(requestInitialFocusVersion = contentFocusRequestVersion)
         }
         composable(Screens.Settings()) {
-            SettingsScreen()
+            SettingsScreen(requestInitialFocusVersion = contentFocusRequestVersion)
         }
     }

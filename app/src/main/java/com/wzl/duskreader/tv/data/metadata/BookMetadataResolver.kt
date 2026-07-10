@@ -17,7 +17,11 @@ class BookMetadataResolver @Inject constructor(
     private val openLibraryCoverResolver: OpenLibraryCoverResolver,
     private val generatedCoverFactory: GeneratedCoverFactory,
 ) {
-    fun resolve(file: File, allowNetworkCover: Boolean = true): ResolvedBookMetadata {
+    fun resolve(
+        file: File,
+        allowNetworkCover: Boolean = true,
+        allowGeneratedCover: Boolean = true,
+    ): ResolvedBookMetadata {
         val localCover = findLocalCover(file)?.let { coverFile ->
             coverFile.inputStream().use { input -> coverCache.save(file, coverFile.extension, input) }
         }
@@ -30,7 +34,12 @@ class BookMetadataResolver @Inject constructor(
         } else {
             null
         }
-        val generatedCoverPath = if (localCover == null && epubMetadata.coverPath == null && openDataMetadata?.coverPath == null) {
+        val generatedCoverPath = if (
+            allowGeneratedCover &&
+            localCover == null &&
+            epubMetadata.coverPath == null &&
+            openDataMetadata?.coverPath == null
+        ) {
             generatedCoverFactory.generate(file, titleForLookup, authorForLookup, file.extension.uppercase(Locale.ROOT))
         } else {
             null
