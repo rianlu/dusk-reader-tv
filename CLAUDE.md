@@ -95,9 +95,10 @@ Documents/暮阅/ (file system)
 
 ## Design Docs
 
-Located in `docs/superpowers/specs/`. **The single source of truth for the visual/interaction design system is `2026-05-31-dusk-reader-design-baseline.md`** — all UI tokens (color, corner radius, spacing, focus treatment, typography) are derived from the **Reader screen**, the approved reference implementation. The Reader's signature focus treatment (white fill + black content + `2dp` white border + `focusedScale=1.04`), near-black panels (`0xFF111111/171717/222222`), `shapes` radii (8/12/16dp), and Serif body text are the standard; align other screens to it.
+Located in `docs/superpowers/specs/` — only two documents, both authoritative:
 
-The older `2026-04-30-dusk-reader-apple-tv-visual-design.md` keeps the "content/poster-first" product direction, but its quantized token rules (≤12dp radius, 1.06 scale, 8/12/16/24/32/48/64-only spacing) are **superseded** by the baseline. `2026-04-30-dusk-reader-functional-design.md` tracks per-screen status (corrected: Settings is a visual skeleton with no-op rows; Reader settings are instant-apply, not draft).
+- **`2026-07-20-dusk-reader-ui-design.md`** — the single source of truth for the visual/interaction design system (consolidates all earlier design docs, now deleted). All tokens are derived from the **Reader screen**, the approved reference implementation: white-fill/black-content focus + `2dp` white border (focused scale `1.04` for immersive reader chrome, `1f` for browse-page cards/buttons as a performance trade-off), near-black panels (`0xFF111111/171717/222222`), `shapes` radii (8/12/16dp), Serif body text. Product direction: Apple TV streaming-style content browsing.
+- **`2026-07-21-book-source-integration.md`** — the authoritative spec for the custom book-source feature (Legado-compatible sources, network reading), including compliance guardrails and phased plan.
 
 > `AGENTS.md` describes a "Trellis" workflow, but the referenced `.trellis/` directory is **not present** in this repo — treat those instructions as inactive.
 
