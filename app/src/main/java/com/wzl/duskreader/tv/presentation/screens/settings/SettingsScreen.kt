@@ -186,8 +186,9 @@ private fun SettingsRow(
     }
 
     Surface(
+        // 信息行也保持可聚焦（TV 惯例：焦点遍历不跳行，disabled Surface 不可聚焦且配色不统一），
+        // 是否可执行动作由 action.enabled 单独控制
         onClick = { if (action.enabled) onClick() },
-        enabled = action.enabled,
         modifier = modifier
             .fillMaxWidth()
             .onFocusChanged { focused = it.hasFocus },

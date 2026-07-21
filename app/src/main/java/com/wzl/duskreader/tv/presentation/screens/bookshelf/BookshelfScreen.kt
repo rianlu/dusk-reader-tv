@@ -7,11 +7,16 @@
 package com.wzl.duskreader.tv.presentation.screens.bookshelf
 
 import android.view.KeyEvent
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +45,7 @@ import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -88,6 +94,23 @@ private const val HOME_TOP_BAR_HIDE_THRESHOLD_PX = 300
 private const val LIBRARY_TOP_BAR_HIDE_THRESHOLD_PX = 100
 private const val LIBRARY_GRID_COLUMNS = 5
 private val BOOK_POSTER_ASPECT_RATIO = 3f / 4f
+
+/**
+ * TV pivot 滚动:把聚焦行钉在视口约 35% 处。
+ * 默认 BringIntoViewSpec 只在项贴边时才滚动,聚焦项落在视口边缘,
+ * 下一行往往尚未组合,D-pad 焦点搜索找不到目标就跳到任意已组合项(表现为跳到第一/最后一个)。
+ * pivot 让焦点行始终远离边缘,后续行提前组合,同时获得连续平滑的滚动手感。
+ */
+private val LibraryPivotBringIntoViewSpec = object : BringIntoViewSpec {
+    override val scrollAnimationSpec: AnimationSpec<Float> = tween(
+        durationMillis = 220,
+        easing = LinearOutSlowInEasing,
+    )
+
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        return offset - containerSize * 0.35f
+    }
+}
 
 enum class BookshelfScreenMode {
     Home,
@@ -273,6 +296,7 @@ private fun LibraryBookshelf(
             )
             return@Column
         }
+        CompositionLocalProvider(LocalBringIntoViewSpec provides LibraryPivotBringIntoViewSpec) {
         LazyVerticalGrid(
             columns = GridCells.Fixed(LIBRARY_GRID_COLUMNS),
             state = gridState,
@@ -322,6 +346,7 @@ private fun LibraryBookshelf(
                     )
                 }
             }
+        }
         }
     }
 
