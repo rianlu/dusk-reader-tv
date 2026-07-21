@@ -62,7 +62,7 @@
    - 沉浸铬层组件(阅读设置/目录/控制层)= `focusedScale = 1.04f`
    - 浏览页卡片与通用按钮(`BookCard` / `DuskTvButton` / 书库网格)= `focusedScale = 1f`(仅靠白底反相 + 描边表达焦点;低端盒子上缩放动画是卡顿源,此为性能取舍)
    - 新组件按所在气质选档;不得出现第三种缩放值
-3. **选中但未聚焦** = `White @ 0.14~0.16` 轻填充,不抢聚焦表现
+3. **选中但未聚焦** = `White @ 0.14~0.16` 轻填充,不抢聚焦表现;**选中项必须带独立于背景色的 ✓ 标记**(文字前缀,聚焦时随内容反色)——聚焦白底会盖掉选中填充,没有 ✓ 时"聚焦在当前生效项"与"聚焦在其它项"无法区分
 4. 可滚动容器内的聚焦项必须挂 `BringIntoViewRequester` + `bringIntoView()`,保证滚入视野
 5. **显式焦点图**:`focusProperties { up/down/left/right }` 明确邻居;边界用 `FocusRequester.Cancel` 封口防逃逸;侧抽屉整体 `left/right = Cancel`
 6. 列表/网格挂 `focusRestorer()` 记忆并恢复焦点;首焦用 `createInitialFocusRestorerModifiers()` 模式

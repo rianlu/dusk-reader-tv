@@ -408,8 +408,10 @@ private fun OptionCard(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
+                // 选中标记独立于背景色：聚焦白底会盖掉 0.16 选中填充，
+                // ✓ 反色后仍可见，保证「当前生效项」在任何焦点状态下可辨认
                 Text(
-                    text = label,
+                    text = if (selected) "✓ $label" else label,
                     color = when {
                         isFocused -> Color.Black
                         selected -> Color.White
@@ -490,8 +492,10 @@ private fun ThemeOption(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = theme.displayName,
-            style = MaterialTheme.typography.labelMedium,
+            text = if (selected) "✓ ${theme.displayName}" else theme.displayName,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            ),
             color = when {
                 isFocused -> Color.White
                 selected -> Color.White

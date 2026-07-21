@@ -626,7 +626,7 @@ fun ReaderScreen(
                                 scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
                             ) {
                                 Text(
-                                    text = chapter.title,
+                                    text = if (isCurrent) "✓ ${chapter.title}" else chapter.title,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(18.dp),
