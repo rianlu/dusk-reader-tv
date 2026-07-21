@@ -50,6 +50,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
+import com.wzl.duskreader.tv.presentation.utils.requestFocusSafely
 import com.wzl.duskreader.tv.presentation.screens.dashboard.rememberChildPadding
 
 private const val APP_VERSION_NAME = "1.0"
@@ -107,7 +108,7 @@ fun SettingsScreen(
     }
 
     LaunchedEffect(requestInitialFocusVersion) {
-        if (requestInitialFocusVersion > 0) firstItemRequester.requestFocus()
+        if (requestInitialFocusVersion > 0) firstItemRequester.requestFocusSafely()
     }
 
     DuskScreenBackground(modifier = modifier) {

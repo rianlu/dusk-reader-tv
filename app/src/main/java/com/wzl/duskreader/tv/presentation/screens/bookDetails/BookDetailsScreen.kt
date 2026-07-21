@@ -39,6 +39,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
+import com.wzl.duskreader.tv.presentation.utils.requestFocusSafely
 import com.wzl.duskreader.tv.data.entities.Book
 import com.wzl.duskreader.tv.data.entities.hasReadingHistory
 import com.wzl.duskreader.tv.data.entities.progressRatio
@@ -85,7 +86,7 @@ private fun Details(
     val childPadding = rememberChildPadding()
     val startButtonFocus = remember { FocusRequester() }
 
-    LaunchedEffect(Unit) { startButtonFocus.requestFocus() }
+    LaunchedEffect(Unit) { startButtonFocus.requestFocusSafely() }
 
     Box(modifier = modifier.fillMaxSize().background(Color(0xFF05070B))) {
         DetailsBackground()

@@ -48,6 +48,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -166,6 +167,8 @@ fun ReaderScreen(
             when {
                 showToc -> {
                     tocListState.scrollToItem(currentChapterIndex.coerceIn(0, chapters.lastIndex.coerceAtLeast(0)))
+                    // 等一帧让目标章节项完成组合,否则 requestFocus 落空导致目录内按键失灵
+                    withFrameNanos { }
                     tocCurrentItemRequester.requestFocus()
                 }
                 showSettings -> settingsFirstRowRequester.requestFocus()

@@ -50,6 +50,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
+import com.wzl.duskreader.tv.presentation.utils.requestFocusSafely
 import com.wzl.duskreader.tv.presentation.common.DuskTvButton
 import com.wzl.duskreader.tv.presentation.common.DuskTvButtonStyle
 import com.wzl.duskreader.tv.presentation.screens.dashboard.rememberChildPadding
@@ -76,7 +77,7 @@ fun TransferScreen(
             TransferScreenUiState.Idle,
             is TransferScreenUiState.Ready,
             is TransferScreenUiState.Unavailable -> {
-                primaryActionRequester.requestFocus()
+                primaryActionRequester.requestFocusSafely()
                 handledFocusRequestVersion = requestInitialFocusVersion
             }
             TransferScreenUiState.Loading -> Unit
@@ -88,7 +89,7 @@ fun TransferScreen(
         when (state) {
             is TransferScreenUiState.Ready,
             is TransferScreenUiState.Unavailable -> {
-                primaryActionRequester.requestFocus()
+                primaryActionRequester.requestFocusSafely()
                 handledActionFocusRequestVersion = actionFocusRequestVersion
             }
             TransferScreenUiState.Idle,

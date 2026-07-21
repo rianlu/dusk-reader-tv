@@ -43,6 +43,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.wzl.duskreader.tv.presentation.utils.requestFocusSafely
 import com.wzl.duskreader.tv.presentation.screens.Screens
 import com.wzl.duskreader.tv.presentation.screens.bookshelf.BookshelfScreen
 import com.wzl.duskreader.tv.presentation.screens.bookshelf.BookshelfScreenMode
@@ -104,11 +105,11 @@ fun DashboardScreen(
         onBackPressed = {
             if (!isTopBarVisible) {
                 isTopBarVisible = true
-                TopBarFocusRequesters[currentTopBarSelectedTabIndex].requestFocus()
+                TopBarFocusRequesters[currentTopBarSelectedTabIndex].requestFocusSafely()
             } else if (currentTopBarSelectedTabIndex == 0) onBackPressed()
             else if (!isTopBarFocused) {
-                TopBarFocusRequesters[currentTopBarSelectedTabIndex].requestFocus()
-            } else TopBarFocusRequesters[0].requestFocus()
+                TopBarFocusRequesters[currentTopBarSelectedTabIndex].requestFocusSafely()
+            } else TopBarFocusRequesters[0].requestFocusSafely()
         }
     ) {
         var wasTopBarFocusRequestedBefore by rememberSaveable { mutableStateOf(false) }
@@ -135,7 +136,7 @@ fun DashboardScreen(
 
         LaunchedEffect(Unit) {
             if (!wasTopBarFocusRequestedBefore) {
-                TopBarFocusRequesters[currentTopBarSelectedTabIndex].requestFocus()
+                TopBarFocusRequesters[currentTopBarSelectedTabIndex].requestFocusSafely()
                 wasTopBarFocusRequestedBefore = true
             }
         }

@@ -32,6 +32,15 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.onPlaced
 
 /**
+ * 安全请求焦点：FocusRequester 尚未附着（目标未组合/已被 Lazy 容器回收）时,
+ * `requestFocus()` 会抛 IllegalStateException 导致闪退。所有在 LaunchedEffect /
+ * 回调中对"可能不在组合中的目标"请求焦点的调用,一律走此方法。
+ */
+fun FocusRequester.requestFocusSafely() {
+    runCatching { requestFocus() }
+}
+
+/**
  * Handles horizontal (Left & Right) D-Pad Keys and consumes the event(s) so that the focus doesn't
  * accidentally move to another element.
  * */

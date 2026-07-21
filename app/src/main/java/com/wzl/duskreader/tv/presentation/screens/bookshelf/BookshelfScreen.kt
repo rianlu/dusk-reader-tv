@@ -81,6 +81,7 @@ import com.wzl.duskreader.tv.presentation.common.BookCover
 import com.wzl.duskreader.tv.presentation.common.DuskTvButton
 import com.wzl.duskreader.tv.presentation.common.DuskTvButtonStyle
 import com.wzl.duskreader.tv.presentation.screens.dashboard.rememberChildPadding
+import com.wzl.duskreader.tv.presentation.utils.requestFocusSafely
 import com.wzl.duskreader.tv.tvmaterial.StandardDialog
 
 private const val HOME_TOP_BAR_HIDE_THRESHOLD_PX = 300
@@ -172,7 +173,7 @@ private fun HomeBookshelf(
         if (isTopBarVisible) listState.animateScrollToItem(0)
     }
     LaunchedEffect(requestInitialFocusVersion) {
-        if (requestInitialFocusVersion > 0) startRequester.requestFocus()
+        if (requestInitialFocusVersion > 0) startRequester.requestFocusSafely()
     }
 
     LazyColumn(
@@ -218,7 +219,6 @@ private fun LibraryBookshelf(
     val searchRequester = remember { FocusRequester() }
     val filterRequester = remember { FocusRequester() }
     val sortRequester = remember { FocusRequester() }
-    val firstBookRequester = remember { FocusRequester() }
     var gridHasFocus by remember { mutableStateOf(false) }
     var showSearchDialog by remember { mutableStateOf(false) }
     var showFilterDialog by remember { mutableStateOf(false) }
@@ -234,10 +234,10 @@ private fun LibraryBookshelf(
         onScroll(shouldShowTopBar && !gridHasFocus)
     }
     LaunchedEffect(requestInitialFocusVersion) {
-        if (requestInitialFocusVersion > 0) searchRequester.requestFocus()
+        if (requestInitialFocusVersion > 0) searchRequester.requestFocusSafely()
     }
     LaunchedEffect(libraryBooks.isEmpty(), showSearchDialog) {
-        if (libraryBooks.isEmpty() && !showSearchDialog) searchRequester.requestFocus()
+        if (libraryBooks.isEmpty() && !showSearchDialog) searchRequester.requestFocusSafely()
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -250,7 +250,6 @@ private fun LibraryBookshelf(
             searchRequester = searchRequester,
             filterRequester = filterRequester,
             sortRequester = sortRequester,
-            firstBookRequester = firstBookRequester,
             hasResults = libraryBooks.isNotEmpty(),
             onSearchClick = { showSearchDialog = true },
             onFilterClick = { showFilterDialog = true },
@@ -280,7 +279,9 @@ private fun LibraryBookshelf(
             modifier = Modifier
                 .fillMaxSize()
                 .onFocusChanged { gridHasFocus = it.hasFocus }
-                .focusRestorer { firstBookRequester },
+                // 无回退目标的 focusRestorer:显式回退到某个网格项的 FocusRequester
+                // 在该项被 Lazy 回收后会因"未附着"直接崩溃(快速滚动场景)
+                .focusRestorer(),
             contentPadding = PaddingValues(
                 start = childPadding.start,
                 top = 10.dp,
@@ -301,7 +302,6 @@ private fun LibraryBookshelf(
                         book = book,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .focusRequesterIf(index == 0, firstBookRequester)
                             .focusProperties {
                                 if (index % LIBRARY_GRID_COLUMNS == 0) {
                                     left = FocusRequester.Cancel
@@ -426,7 +426,6 @@ private fun LibraryToolbar(
     searchRequester: FocusRequester,
     filterRequester: FocusRequester,
     sortRequester: FocusRequester,
-    firstBookRequester: FocusRequester,
     hasResults: Boolean,
     onSearchClick: () -> Unit,
     onFilterClick: () -> Unit,
@@ -455,7 +454,8 @@ private fun LibraryToolbar(
                     .focusRequester(searchRequester)
                     .focusProperties {
                         right = filterRequester
-                        down = if (hasResults) firstBookRequester else FocusRequester.Cancel
+                        // 有结果时不强制指向第 0 项(可能已被回收),交给默认 2D 焦点搜索
+                        if (!hasResults) down = FocusRequester.Cancel
                     },
             )
             DuskTvButton(
@@ -468,7 +468,7 @@ private fun LibraryToolbar(
                     .focusProperties {
                         left = searchRequester
                         right = sortRequester
-                        down = if (hasResults) firstBookRequester else FocusRequester.Cancel
+                        if (!hasResults) down = FocusRequester.Cancel
                     },
             )
             DuskTvButton(
@@ -481,7 +481,7 @@ private fun LibraryToolbar(
                     .focusProperties {
                         left = filterRequester
                         right = FocusRequester.Cancel
-                        down = if (hasResults) firstBookRequester else FocusRequester.Cancel
+                        if (!hasResults) down = FocusRequester.Cancel
                     },
             )
         }
@@ -531,7 +531,7 @@ private fun LibrarySearchDialog(
     var inputFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(showDialog) {
-        if (showDialog) inputRequester.requestFocus()
+        if (showDialog) inputRequester.requestFocusSafely()
     }
 
     StandardDialog(
@@ -554,7 +554,7 @@ private fun LibrarySearchDialog(
                         when (event.nativeKeyEvent.keyCode) {
                             KeyEvent.KEYCODE_DPAD_DOWN,
                             KeyEvent.KEYCODE_SYSTEM_NAVIGATION_DOWN -> {
-                                if (event.type == KeyEventType.KeyDown) confirmRequester.requestFocus()
+                                if (event.type == KeyEventType.KeyDown) confirmRequester.requestFocusSafely()
                                 true
                             }
 
@@ -628,7 +628,7 @@ private fun <T> LibraryOptionDialog(
     val selectedRequester = remember { FocusRequester() }
 
     LaunchedEffect(showDialog) {
-        if (showDialog) selectedRequester.requestFocus()
+        if (showDialog) selectedRequester.requestFocusSafely()
     }
 
     StandardDialog(
