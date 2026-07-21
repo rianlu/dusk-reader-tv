@@ -11,33 +11,33 @@ import com.wzl.duskreader.tv.data.repositories.BookRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-internal const val LIBRARY_LIMIT = 240
+// 搜索输入防抖：避免遥控器/手机端每个按键都触发全量过滤与整个网格重组
+internal const val SEARCH_DEBOUNCE_MS = 250L
 
 enum class LibraryFormatFilter(val label: String) {
     All("全部格式"),
     Txt("仅 TXT"),
-    Epub("仅 EPUB");
-
-    fun next(): LibraryFormatFilter = entries[(ordinal + 1) % entries.size]
+    Epub("仅 EPUB"),
 }
 
 enum class LibrarySort(val label: String) {
     Imported("最近导入"),
     Read("最近阅读"),
-    Title("书名排序");
-
-    fun next(): LibrarySort = entries[(ordinal + 1) % entries.size]
+    Title("书名排序"),
 }
 
+@OptIn(FlowPreview::class)
 @HiltViewModel
 class BookshelfScreenViewModel @Inject constructor(
     private val bookRepository: BookRepository,
@@ -53,7 +53,8 @@ class BookshelfScreenViewModel @Inject constructor(
     val uiState: StateFlow<BookshelfUiState> = combine(
         bookRepository.getRecentBooks(limit = 8),
         bookRepository.getAllBooks(),
-        searchQuery,
+        // 过滤用防抖后的关键字；searchQuery 本身保持即时值供输入框回显
+        searchQuery.debounce(SEARCH_DEBOUNCE_MS),
         formatFilter,
         librarySort,
     ) { recent, all, query, filter, sort ->
@@ -73,16 +74,19 @@ class BookshelfScreenViewModel @Inject constructor(
         initialValue = BookshelfUiState.Loading,
     )
 
+    /** 输入框即时回显值（不防抖），与 [BookshelfUiState.Ready.searchQuery] 的防抖值分离。 */
+    val liveSearchQuery: StateFlow<String> = searchQuery.asStateFlow()
+
     fun updateSearchQuery(query: String) {
         searchQuery.value = query
     }
 
-    fun cycleFormatFilter() {
-        formatFilter.value = formatFilter.value.next()
+    fun setFormatFilter(filter: LibraryFormatFilter) {
+        formatFilter.value = filter
     }
 
-    fun cycleLibrarySort() {
-        librarySort.value = librarySort.value.next()
+    fun setLibrarySort(sort: LibrarySort) {
+        librarySort.value = sort
     }
 
     fun rescanLibrary() {
@@ -146,5 +150,5 @@ internal fun filterAndSortLibraryBooks(
         LibrarySort.Title -> compareBy(String.CASE_INSENSITIVE_ORDER) { book: Book -> book.title }
             .thenByDescending { it.importedAt }
     }
-    return filtered.sortedWith(comparator).take(LIBRARY_LIMIT).toList()
+    return filtered.sortedWith(comparator).toList()
 }

@@ -7,8 +7,8 @@ import org.junit.Test
 class LibraryBookFilterTest {
 
     @Test
-    fun search_matchesTitleAndAuthorBeforeApplyingLimit() {
-        val books = (1..LIBRARY_LIMIT).map { index ->
+    fun search_matchesTitleAndAuthorAcrossLargeLibrary() {
+        val books = (1..500).map { index ->
             book(id = index.toLong(), title = "普通书籍 $index", importedAt = index.toLong())
         } + book(
             id = 999,
@@ -34,6 +34,16 @@ class LibraryBookFilterTest {
                 formatFilter = LibraryFormatFilter.All,
                 sort = LibrarySort.Imported,
             ).map { it.title },
+        )
+        // 无截断：全量书籍都应出现在结果中
+        assertEquals(
+            books.size,
+            filterAndSortLibraryBooks(
+                books = books,
+                query = "",
+                formatFilter = LibraryFormatFilter.All,
+                sort = LibrarySort.Imported,
+            ).size,
         )
     }
 

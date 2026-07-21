@@ -105,6 +105,7 @@ fun BookshelfScreen(
     viewModel: BookshelfScreenViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val liveSearchQuery by viewModel.liveSearchQuery.collectAsStateWithLifecycle()
 
     DuskPageBackground {
         when (val state = uiState) {
@@ -128,12 +129,13 @@ fun BookshelfScreen(
                             allBooks = state.allBooks,
                             libraryBooks = state.libraryBooks,
                             searchQuery = state.searchQuery,
+                            liveSearchQuery = liveSearchQuery,
                             formatFilter = state.formatFilter,
                             librarySort = state.librarySort,
                             onBookClick = onBookClick,
                             onSearchQueryChange = viewModel::updateSearchQuery,
-                            onCycleFormatFilter = viewModel::cycleFormatFilter,
-                            onCycleLibrarySort = viewModel::cycleLibrarySort,
+                            onSelectFormatFilter = viewModel::setFormatFilter,
+                            onSelectLibrarySort = viewModel::setLibrarySort,
                             onScroll = onScroll,
                             requestInitialFocusVersion = requestInitialFocusVersion,
                         )
@@ -201,12 +203,13 @@ private fun LibraryBookshelf(
     allBooks: BookList,
     libraryBooks: BookList,
     searchQuery: String,
+    liveSearchQuery: String,
     formatFilter: LibraryFormatFilter,
     librarySort: LibrarySort,
     onBookClick: (book: Book) -> Unit,
     onSearchQueryChange: (String) -> Unit,
-    onCycleFormatFilter: () -> Unit,
-    onCycleLibrarySort: () -> Unit,
+    onSelectFormatFilter: (LibraryFormatFilter) -> Unit,
+    onSelectLibrarySort: (LibrarySort) -> Unit,
     onScroll: (isTopBarVisible: Boolean) -> Unit,
     requestInitialFocusVersion: Long,
 ) {
@@ -218,6 +221,8 @@ private fun LibraryBookshelf(
     val firstBookRequester = remember { FocusRequester() }
     var gridHasFocus by remember { mutableStateOf(false) }
     var showSearchDialog by remember { mutableStateOf(false) }
+    var showFilterDialog by remember { mutableStateOf(false) }
+    var showSortDialog by remember { mutableStateOf(false) }
 
     val shouldShowTopBar by remember {
         derivedStateOf {
@@ -248,8 +253,8 @@ private fun LibraryBookshelf(
             firstBookRequester = firstBookRequester,
             hasResults = libraryBooks.isNotEmpty(),
             onSearchClick = { showSearchDialog = true },
-            onCycleFormatFilter = onCycleFormatFilter,
-            onCycleLibrarySort = onCycleLibrarySort,
+            onFilterClick = { showFilterDialog = true },
+            onSortClick = { showSortDialog = true },
             modifier = Modifier.padding(
                 start = childPadding.start,
                 end = childPadding.end,
@@ -322,9 +327,33 @@ private fun LibraryBookshelf(
 
     LibrarySearchDialog(
         showDialog = showSearchDialog,
-        query = searchQuery,
+        query = liveSearchQuery,
         onQueryChange = onSearchQueryChange,
         onDismissRequest = { showSearchDialog = false },
+    )
+    LibraryOptionDialog(
+        showDialog = showFilterDialog,
+        title = "格式筛选",
+        options = LibraryFormatFilter.entries,
+        selected = formatFilter,
+        label = { it.label },
+        onSelect = {
+            onSelectFormatFilter(it)
+            showFilterDialog = false
+        },
+        onDismissRequest = { showFilterDialog = false },
+    )
+    LibraryOptionDialog(
+        showDialog = showSortDialog,
+        title = "排序方式",
+        options = LibrarySort.entries,
+        selected = librarySort,
+        label = { it.label },
+        onSelect = {
+            onSelectLibrarySort(it)
+            showSortDialog = false
+        },
+        onDismissRequest = { showSortDialog = false },
     )
 }
 
@@ -400,8 +429,8 @@ private fun LibraryToolbar(
     firstBookRequester: FocusRequester,
     hasResults: Boolean,
     onSearchClick: () -> Unit,
-    onCycleFormatFilter: () -> Unit,
-    onCycleLibrarySort: () -> Unit,
+    onFilterClick: () -> Unit,
+    onSortClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val (txtCount, epubCount) = remember(books) {
@@ -433,7 +462,7 @@ private fun LibraryToolbar(
                 text = formatFilter.label,
                 icon = Icons.Outlined.FilterAlt,
                 style = DuskTvButtonStyle.Secondary,
-                onClick = onCycleFormatFilter,
+                onClick = onFilterClick,
                 modifier = Modifier
                     .focusRequester(filterRequester)
                     .focusProperties {
@@ -446,7 +475,7 @@ private fun LibraryToolbar(
                 text = librarySort.label,
                 icon = Icons.AutoMirrored.Outlined.Sort,
                 style = DuskTvButtonStyle.Secondary,
-                onClick = onCycleLibrarySort,
+                onClick = onSortClick,
                 modifier = Modifier
                     .focusRequester(sortRequester)
                     .focusProperties {
@@ -583,6 +612,94 @@ private fun LibrarySearchDialog(
         } else {
             null
         },
+    )
+}
+
+@Composable
+private fun <T> LibraryOptionDialog(
+    showDialog: Boolean,
+    title: String,
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+    onDismissRequest: () -> Unit,
+) {
+    val selectedRequester = remember { FocusRequester() }
+
+    LaunchedEffect(showDialog) {
+        if (showDialog) selectedRequester.requestFocus()
+    }
+
+    StandardDialog(
+        showDialog = showDialog,
+        onDismissRequest = onDismissRequest,
+        title = { Text(title) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusGroup(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                options.forEach { option ->
+                    val isSelected = option == selected
+                    var focused by remember { mutableStateOf(false) }
+                    Surface(
+                        onClick = { onSelect(option) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequesterIf(isSelected, selectedRequester)
+                            .onFocusChanged { focused = it.hasFocus }
+                            .focusProperties {
+                                left = FocusRequester.Cancel
+                                right = FocusRequester.Cancel
+                            },
+                        shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.medium),
+                        colors = ClickableSurfaceDefaults.colors(
+                            containerColor = if (isSelected) {
+                                Color.White.copy(alpha = 0.16f)
+                            } else {
+                                Color.White.copy(alpha = 0.08f)
+                            },
+                            contentColor = Color.White,
+                            focusedContainerColor = Color.White,
+                            focusedContentColor = Color.Black,
+                        ),
+                        border = ClickableSurfaceDefaults.border(
+                            focusedBorder = Border(
+                                border = BorderStroke(2.dp, Color.White),
+                                shape = MaterialTheme.shapes.medium,
+                            ),
+                        ),
+                        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 18.dp, vertical = 14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = label(option),
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                ),
+                            )
+                            if (isSelected) {
+                                Text(
+                                    text = "✓",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = if (focused) Color.Black else Color.White,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
     )
 }
 
