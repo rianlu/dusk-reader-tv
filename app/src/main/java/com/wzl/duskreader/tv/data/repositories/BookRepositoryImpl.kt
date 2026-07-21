@@ -4,6 +4,7 @@ import android.os.Environment
 import com.wzl.duskreader.tv.data.entities.Book
 import com.wzl.duskreader.tv.data.entities.BookKind
 import com.wzl.duskreader.tv.data.entities.CoverSource
+import com.wzl.duskreader.tv.data.local.BookChapterDao
 import com.wzl.duskreader.tv.data.local.BookDao
 import com.wzl.duskreader.tv.data.metadata.BookMetadataResolver
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +17,7 @@ import javax.inject.Singleton
 @Singleton
 class BookRepositoryImpl @Inject constructor(
     private val bookDao: BookDao,
+    private val bookChapterDao: BookChapterDao,
     private val metadataResolver: BookMetadataResolver,
 ) : BookRepository {
 
@@ -39,7 +41,10 @@ class BookRepositoryImpl @Inject constructor(
 
     override suspend fun update(book: Book) = bookDao.updateBook(book)
 
-    override suspend fun delete(book: Book) = bookDao.deleteBook(book)
+    override suspend fun delete(book: Book) {
+        bookChapterDao.deleteByBookId(book.id)
+        bookDao.deleteBook(book)
+    }
 
     override suspend fun scanLocalStorage(): Int = withContext(Dispatchers.IO) {
         val bookDir = resolveBookDir(createIfMissing = true) ?: return@withContext 0
@@ -80,8 +85,17 @@ class BookRepositoryImpl @Inject constructor(
         } else {
             bookDao.insertBooks(booksToInsert).count { it > 0 }
         }
-        if (booksToUpdate.isNotEmpty()) bookDao.updateBooks(booksToUpdate)
-        if (staleBooks.isNotEmpty()) bookDao.deleteBooks(staleBooks)
+        if (booksToUpdate.isNotEmpty()) {
+            // 文件内容已变化：旧章节索引的字节偏移已失效，必须清除，
+            // 否则阅读器复用缓存索引会读到错误位置的正文
+            booksToUpdate.forEach { bookChapterDao.deleteByBookId(it.id) }
+            bookDao.updateBooks(booksToUpdate)
+        }
+        if (staleBooks.isNotEmpty()) {
+            // book_chapters 无外键级联，需手动清理，避免孤儿章节索引累积
+            staleBooks.forEach { bookChapterDao.deleteByBookId(it.id) }
+            bookDao.deleteBooks(staleBooks)
+        }
 
         android.util.Log.d(
             TAG,
@@ -158,6 +172,9 @@ class BookRepositoryImpl @Inject constructor(
             format = imported.format,
             fileSize = imported.fileSize,
             totalSize = imported.totalSize,
+            // 文件内容已变化，旧的章节进度不再有效（与传书覆盖路径的语义一致）
+            lastReadChapter = 0,
+            lastReadPosition = 0,
         )
     }
 
