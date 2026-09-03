@@ -46,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -109,9 +110,10 @@ fun ReaderScreen(
     val bookTitle by viewModel.bookTitle.collectAsStateWithLifecycle()
     val readerSettings by viewModel.readerSettings.collectAsStateWithLifecycle()
 
-    var showControls by remember { mutableStateOf(false) }
-    var showToc by remember { mutableStateOf(false) }
-    var showSettings by remember { mutableStateOf(false) }
+    // TV 进程低杀重建后恢复菜单层级（P1-3 状态恢复）：重建即回到退出前的 chrome 状态
+    var showControls by rememberSaveable { mutableStateOf(false) }
+    var showToc by rememberSaveable { mutableStateOf(false) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
     var isExiting by remember { mutableStateOf(false) }
     var consumedMenuKeyDownAt by remember { mutableLongStateOf(0L) }
 

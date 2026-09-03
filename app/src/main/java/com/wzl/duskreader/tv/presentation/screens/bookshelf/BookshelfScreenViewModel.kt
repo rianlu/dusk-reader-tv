@@ -8,6 +8,7 @@ import com.wzl.duskreader.tv.data.entities.BookList
 import com.wzl.duskreader.tv.data.entities.hasReadingHistory
 import com.wzl.duskreader.tv.data.entities.kind
 import com.wzl.duskreader.tv.data.repositories.BookRepository
+import androidx.lifecycle.SavedStateHandle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +26,11 @@ import kotlinx.coroutines.launch
 // 搜索输入防抖：避免遥控器/手机端每个按键都触发全量过滤与整个网格重组
 internal const val SEARCH_DEBOUNCE_MS = 250L
 
+// SavedStateHandle 持久化键（P1-3 状态恢复）
+private const val KEY_SEARCH_QUERY = "library_search_query"
+private const val KEY_FORMAT_FILTER = "library_format_filter"
+private const val KEY_LIBRARY_SORT = "library_sort"
+
 enum class LibraryFormatFilter(val label: String) {
     All("全部格式"),
     Txt("仅 TXT"),
@@ -41,14 +47,17 @@ enum class LibrarySort(val label: String) {
 @HiltViewModel
 class BookshelfScreenViewModel @Inject constructor(
     private val bookRepository: BookRepository,
+    // TV 低内存场景进程被杀后重建：搜索词/筛选/排序经 SavedStateHandle 恢复，
+    // 用户不必重新输入（P1-3 状态恢复）
+    private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
     private val _rescanState = MutableStateFlow<RescanState>(RescanState.Idle)
     val rescanState: StateFlow<RescanState> = _rescanState.asStateFlow()
 
-    private val searchQuery = MutableStateFlow("")
-    private val formatFilter = MutableStateFlow(LibraryFormatFilter.All)
-    private val librarySort = MutableStateFlow(LibrarySort.Imported)
+    private val searchQuery = savedStateHandle.getStateFlow(KEY_SEARCH_QUERY, "")
+    private val formatFilter = savedStateHandle.getStateFlow(KEY_FORMAT_FILTER, LibraryFormatFilter.All)
+    private val librarySort = savedStateHandle.getStateFlow(KEY_LIBRARY_SORT, LibrarySort.Imported)
 
     val uiState: StateFlow<BookshelfUiState> = combine(
         bookRepository.getRecentBooks(limit = 8),
@@ -75,18 +84,18 @@ class BookshelfScreenViewModel @Inject constructor(
     )
 
     /** 输入框即时回显值（不防抖），与 [BookshelfUiState.Ready.searchQuery] 的防抖值分离。 */
-    val liveSearchQuery: StateFlow<String> = searchQuery.asStateFlow()
+    val liveSearchQuery: StateFlow<String> = searchQuery
 
     fun updateSearchQuery(query: String) {
-        searchQuery.value = query
+        savedStateHandle[KEY_SEARCH_QUERY] = query
     }
 
     fun setFormatFilter(filter: LibraryFormatFilter) {
-        formatFilter.value = filter
+        savedStateHandle[KEY_FORMAT_FILTER] = filter
     }
 
     fun setLibrarySort(sort: LibrarySort) {
-        librarySort.value = sort
+        savedStateHandle[KEY_LIBRARY_SORT] = sort
     }
 
     fun rescanLibrary() {

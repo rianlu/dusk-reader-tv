@@ -29,11 +29,12 @@
 - [x] 搜索入口保留按钮（唯一弹窗：搜索输入）
 - [ ] 回归：chip 即点即生效、焦点不丢、无弹窗层级（待实机）
 
-### P1-3 rememberSaveable 状态恢复
-- [ ] 书库：网格滚动位置（LazyGridState via rememberLazyGridState saveable 默认行为核实）
-- [ ] 书库：搜索词（ViewModel 已持状态，核实进程重建恢复）
-- [ ] 设置/传书页状态恢复核实
-- [ ] 阅读器 overlay 状态（showControls/showToc/showSettings）
+### P1-3 rememberSaveable 状态恢复 ✅ 已完成
+- [x] 书库：网格滚动位置——rememberLazyGridState 默认即 saveable（核实无需改动）
+- [x] 书库：搜索词/筛选/排序——ViewModel 改 SavedStateHandle（getStateFlow，进程重建恢复）
+- [x] 书库：showSearchDialog → rememberSaveable
+- [x] 阅读器：overlay 三态（showControls/showToc/showSettings）→ rememberSaveable
+- [ ] 回归：开发者选项「不保留活动」后重建，验证搜索词/chip 状态/阅读器菜单层级恢复（待实机）
 
 ## 🧹 P2 清理与体验（未开始）
 
@@ -65,6 +66,7 @@
 
 ## 变更日志
 
-- 2026-09-01 P1-2 完成：筛选/排序 FilterChip 平铺，删 LibraryOptionDialog（+94/-189）
+- 2026-09-01 P1-3 完成：SavedStateHandle+rememberSaveable 状态恢复
+- 2026-09-01 P1-2 完成：筛选/排序 FilterChip 平铺，删 LibraryOptionDialog
 - 2026-09-01 P0 完成（`0215550`）：四项根因修复 + 版本号协议废除
 - 2026-09-01 文档收口（`ba3864f`）：AGENTS/DESIGN/analysis 体系建立
