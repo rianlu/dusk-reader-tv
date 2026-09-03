@@ -94,6 +94,7 @@ Documents/暮阅/ (file system)
 
 ## Docs
 
+- **`docs/TASKS.md`** — refactoring task checklist with progress tracking (P0–P3). Update it as tasks complete.
 - **`DESIGN.md`** (repo root) — the single source of truth for the visual/interaction design system, derived entirely from the Reader screen (the approved reference implementation). Product direction: Apple TV streaming-style content browsing. Follow it for any UI/interaction/navigation change.
 - **`docs/analysis/2026-09-01-vs-official-samples.md`** — deep comparison of this app against the two relevant official samples (focus regression root causes, architecture and component-usage findings, prioritized fix plan). Read it before touching focus/scrolling code.
 - **`docs/superpowers/specs/2026-07-21-book-source-integration.md`** — the authoritative spec for the custom book-source feature (Legado-compatible sources, network reading), including compliance guardrails and phased plan.

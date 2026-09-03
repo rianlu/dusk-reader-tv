@@ -37,9 +37,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.outlined.AutoStories
-import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -70,6 +68,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.FilterChip
+import androidx.tv.material3.FilterChipDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
@@ -234,11 +234,8 @@ private fun LibraryBookshelf(
     val childPadding = rememberChildPadding()
     val gridState = rememberLazyGridState()
     val searchRequester = remember { FocusRequester() }
-    val filterRequester = remember { FocusRequester() }
-    val sortRequester = remember { FocusRequester() }
     var showSearchDialog by remember { mutableStateOf(false) }
-    var showFilterDialog by remember { mutableStateOf(false) }
-    var showSortDialog by remember { mutableStateOf(false) }
+    val firstChipRequester = remember { FocusRequester() }
 
     val shouldShowTopBar by remember {
         derivedStateOf {
@@ -262,12 +259,11 @@ private fun LibraryBookshelf(
             formatFilter = formatFilter,
             librarySort = librarySort,
             searchRequester = searchRequester,
-            filterRequester = filterRequester,
-            sortRequester = sortRequester,
+            firstChipRequester = firstChipRequester,
             hasResults = libraryBooks.isNotEmpty(),
+            onSelectFormatFilter = onSelectFormatFilter,
+            onSelectLibrarySort = onSelectLibrarySort,
             onSearchClick = { showSearchDialog = true },
-            onFilterClick = { showFilterDialog = true },
-            onSortClick = { showSortDialog = true },
             modifier = Modifier.padding(
                 start = childPadding.start,
                 end = childPadding.end,
@@ -341,30 +337,6 @@ private fun LibraryBookshelf(
         onQueryChange = onSearchQueryChange,
         onDismissRequest = { showSearchDialog = false },
     )
-    LibraryOptionDialog(
-        showDialog = showFilterDialog,
-        title = "格式筛选",
-        options = LibraryFormatFilter.entries,
-        selected = formatFilter,
-        label = { it.label },
-        onSelect = {
-            onSelectFormatFilter(it)
-            showFilterDialog = false
-        },
-        onDismissRequest = { showFilterDialog = false },
-    )
-    LibraryOptionDialog(
-        showDialog = showSortDialog,
-        title = "排序方式",
-        options = LibrarySort.entries,
-        selected = librarySort,
-        label = { it.label },
-        onSelect = {
-            onSelectLibrarySort(it)
-            showSortDialog = false
-        },
-        onDismissRequest = { showSortDialog = false },
-    )
 }
 
 @Composable
@@ -434,12 +406,11 @@ private fun LibraryToolbar(
     formatFilter: LibraryFormatFilter,
     librarySort: LibrarySort,
     searchRequester: FocusRequester,
-    filterRequester: FocusRequester,
-    sortRequester: FocusRequester,
+    firstChipRequester: FocusRequester,
     hasResults: Boolean,
+    onSelectFormatFilter: (LibraryFormatFilter) -> Unit,
+    onSelectLibrarySort: (LibrarySort) -> Unit,
     onSearchClick: () -> Unit,
-    onFilterClick: () -> Unit,
-    onSortClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val (txtCount, epubCount) = remember(books) {
@@ -453,7 +424,8 @@ private fun LibraryToolbar(
     ) {
         Row(
             modifier = Modifier.focusGroup(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             DuskTvButton(
                 text = searchLabel,
@@ -463,37 +435,44 @@ private fun LibraryToolbar(
                 modifier = Modifier
                     .focusRequester(searchRequester)
                     .focusProperties {
-                        right = filterRequester
-                        // 有结果时不强制指向第 0 项(可能已被回收),交给默认 2D 焦点搜索
+                        // 右邻与下邻交给默认 2D 焦点搜索（chip 行/网格都在几何下方）
                         if (!hasResults) down = FocusRequester.Cancel
                     },
             )
-            DuskTvButton(
-                text = formatFilter.label,
-                icon = Icons.Outlined.FilterAlt,
-                style = DuskTvButtonStyle.Secondary,
-                onClick = onFilterClick,
-                modifier = Modifier
-                    .focusRequester(filterRequester)
-                    .focusProperties {
-                        left = searchRequester
-                        right = sortRequester
-                        if (!hasResults) down = FocusRequester.Cancel
-                    },
-            )
-            DuskTvButton(
-                text = librarySort.label,
-                icon = Icons.AutoMirrored.Outlined.Sort,
-                style = DuskTvButtonStyle.Secondary,
-                onClick = onSortClick,
-                modifier = Modifier
-                    .focusRequester(sortRequester)
-                    .focusProperties {
-                        left = filterRequester
-                        right = FocusRequester.Cancel
-                        if (!hasResults) down = FocusRequester.Cancel
-                    },
-            )
+            // 筛选/排序平铺 chip 行（官方 MovieFilterChipRow 模式）：
+            // 即点即生效，取代「按钮 + 弹窗」两层交互
+            Row(
+                modifier = Modifier.focusGroup(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                LibraryFormatFilter.entries.forEachIndexed { index, filter ->
+                    LibraryFilterChip(
+                        label = filter.label,
+                        selected = filter == formatFilter,
+                        onClick = { onSelectFormatFilter(filter) },
+                        modifier = Modifier
+                            .then(
+                                if (index == 0) Modifier.focusRequester(firstChipRequester)
+                                else Modifier,
+                            )
+                            .focusProperties {
+                                if (!hasResults) down = FocusRequester.Cancel
+                            },
+                    )
+                }
+                // 分隔与排序组
+                LibrarySort.entries.forEach { sort ->
+                    LibraryFilterChip(
+                        label = sort.label,
+                        selected = sort == librarySort,
+                        onClick = { onSelectLibrarySort(sort) },
+                        modifier = Modifier.focusProperties {
+                            if (!hasResults) down = FocusRequester.Cancel
+                        },
+                    )
+                }
+            }
         }
         Text(
             text = "共 ${books.size} 本 · TXT $txtCount · EPUB $epubCount · 当前显示 $shownCount 本",
@@ -502,6 +481,55 @@ private fun LibraryToolbar(
             color = Color.White.copy(alpha = 0.58f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/**
+ * 书库筛选 chip：tv-material3 FilterChip + 暮阅聚焦签名（白底反相 + 2dp 描边，DESIGN.md §2.2/§4）。
+ * 选中态 = 0.14 白填充 + ✓ 前缀（与阅读设置 OptionCard 一致）。
+ */
+@Composable
+private fun LibraryFilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val chipShape = MaterialTheme.shapes.small
+    FilterChip(
+        modifier = modifier.onFocusChanged { focused = it.isFocused || it.hasFocus },
+        onClick = onClick,
+        selected = selected,
+        shape = FilterChipDefaults.shape(shape = chipShape),
+        scale = FilterChipDefaults.scale(focusedScale = 1f),
+        colors = FilterChipDefaults.colors(
+            containerColor = Color.White.copy(alpha = 0.05f),
+            contentColor = Color.White.copy(alpha = 0.86f),
+            selectedContainerColor = Color.White.copy(alpha = 0.14f),
+            selectedContentColor = Color.White,
+            focusedContainerColor = Color.White,
+            focusedContentColor = Color.Black,
+            focusedSelectedContainerColor = Color.White,
+            focusedSelectedContentColor = Color.Black,
+        ),
+        border = FilterChipDefaults.border(
+            border = Border(
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)),
+                shape = chipShape,
+            ),
+            focusedBorder = Border(
+                border = BorderStroke(2.dp, Color.White),
+                shape = chipShape,
+            ),
+        ),
+    ) {
+        Text(
+            text = if (selected) "✓ $label" else label,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            ),
         )
     }
 }
@@ -625,93 +653,6 @@ private fun LibrarySearchDialog(
     )
 }
 
-@Composable
-private fun <T> LibraryOptionDialog(
-    showDialog: Boolean,
-    title: String,
-    options: List<T>,
-    selected: T,
-    label: (T) -> String,
-    onSelect: (T) -> Unit,
-    onDismissRequest: () -> Unit,
-) {
-    val selectedRequester = remember { FocusRequester() }
-
-    LaunchedEffect(showDialog) {
-        if (showDialog) selectedRequester.requestFocusSafely()
-    }
-
-    StandardDialog(
-        showDialog = showDialog,
-        onDismissRequest = onDismissRequest,
-        title = { Text(title) },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusGroup(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                options.forEach { option ->
-                    val isSelected = option == selected
-                    var focused by remember { mutableStateOf(false) }
-                    Surface(
-                        onClick = { onSelect(option) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequesterIf(isSelected, selectedRequester)
-                            .onFocusChanged { focused = it.hasFocus }
-                            .focusProperties {
-                                left = FocusRequester.Cancel
-                                right = FocusRequester.Cancel
-                            },
-                        shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.medium),
-                        colors = ClickableSurfaceDefaults.colors(
-                            containerColor = if (isSelected) {
-                                Color.White.copy(alpha = 0.16f)
-                            } else {
-                                Color.White.copy(alpha = 0.08f)
-                            },
-                            contentColor = Color.White,
-                            focusedContainerColor = Color.White,
-                            focusedContentColor = Color.Black,
-                        ),
-                        border = ClickableSurfaceDefaults.border(
-                            focusedBorder = Border(
-                                border = BorderStroke(2.dp, Color.White),
-                                shape = MaterialTheme.shapes.medium,
-                            ),
-                        ),
-                        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 18.dp, vertical = 14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = label(option),
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                ),
-                            )
-                            if (isSelected) {
-                                Text(
-                                    text = "✓",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = if (focused) Color.Black else Color.White,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-    )
-}
 
 @Composable
 private fun LibraryBookTile(
