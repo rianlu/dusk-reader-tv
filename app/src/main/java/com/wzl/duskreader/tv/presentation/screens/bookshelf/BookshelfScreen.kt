@@ -12,8 +12,6 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.gestures.BringIntoViewSpec
-import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,9 +27,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -40,7 +35,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -53,7 +47,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -82,6 +75,7 @@ import com.wzl.duskreader.tv.data.entities.kind
 import com.wzl.duskreader.tv.data.entities.hasReadingHistory
 import com.wzl.duskreader.tv.data.entities.progressRatio
 import com.wzl.duskreader.tv.presentation.common.BookCover
+import com.wzl.duskreader.tv.presentation.common.BooksGrid
 import com.wzl.duskreader.tv.presentation.common.DuskTvButton
 import com.wzl.duskreader.tv.presentation.common.DuskTvButtonStyle
 import com.wzl.duskreader.tv.presentation.screens.dashboard.rememberChildPadding
@@ -90,32 +84,7 @@ import com.wzl.duskreader.tv.tvmaterial.StandardDialog
 
 private const val HOME_TOP_BAR_HIDE_THRESHOLD_PX = 300
 private const val LIBRARY_TOP_BAR_HIDE_THRESHOLD_PX = 100
-private const val LIBRARY_GRID_COLUMNS = 5
 private val BOOK_POSTER_ASPECT_RATIO = 3f / 4f
-
-/**
- * TV pivot 滚动：把聚焦行钉在视口约 30% 处（对齐 TvMaterialCatalog 的
- * PositionFocusedItemInLazyLayout 实现公式）。默认策略下聚焦项贴边时下一行尚未组合，
- * D-pad 焦点搜索落空导致跳焦；pivot 让后续行提前组合。
- * 注意：不覆写 scrollAnimationSpec——默认弹簧动画支持连发按键时平滑重定向，
- * 自定义 tween 每次按键都从静止重启，快速连按时滚动追不上焦点。
- */
-private const val LIBRARY_PIVOT_PARENT_FRACTION = 0.3f
-
-private val LibraryPivotBringIntoViewSpec = object : BringIntoViewSpec {
-    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-        val childSmallerThanParent = size <= containerSize
-        val initialTargetForLeadingEdge = LIBRARY_PIVOT_PARENT_FRACTION * containerSize
-        val spaceAvailableToShowItem = containerSize - initialTargetForLeadingEdge
-        val targetForLeadingEdge =
-            if (childSmallerThanParent && spaceAvailableToShowItem < size) {
-                containerSize - size
-            } else {
-                initialTargetForLeadingEdge
-            }
-        return offset - targetForLeadingEdge
-    }
-}
 
 enum class BookshelfScreenMode {
     Home,
@@ -284,52 +253,28 @@ private fun LibraryBookshelf(
             )
             return@Column
         }
-        CompositionLocalProvider(LocalBringIntoViewSpec provides LibraryPivotBringIntoViewSpec) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(LIBRARY_GRID_COLUMNS),
+        // 网格焦点治理已内收到 BooksGrid 容器（P1-1，对齐官方 MoviesRow 容器级焦点模式）：
+        // pivot 滚动/restorer 恒组合锚点/边界最小规则全部由组件提供
+        BooksGrid(
+            books = libraryBooks,
+            anchorRequester = searchRequester,
+            onBookClick = onBookClick,
+            modifier = Modifier.fillMaxSize(),
             state = gridState,
-            modifier = Modifier
-                .fillMaxSize()
-                // restorer fallback 指向 toolbar 的搜索按钮（恒组合，不在 Lazy 容器内），
-                // 焦点回到网格时优先恢复上次聚焦项，被回收时退到搜索栏而不会跳到任意项
-                .focusRestorer { searchRequester },
             contentPadding = PaddingValues(
                 start = childPadding.start,
                 top = 10.dp,
                 end = childPadding.end,
                 bottom = 132.dp,
             ),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            gridItemsIndexed(libraryBooks, key = { _, book -> book.id }) { index, book ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 6.dp, vertical = 6.dp),
-                    contentAlignment = Alignment.TopCenter,
-                ) {
-                    // per-item 规则最小化（对齐官方 CategoriesScreen：仅封网格左/右边界，
-                    // 防跨行逃逸）；首行 up 与末行 down 交给默认 2D 焦点搜索，
-                    // 动态列表（搜索/过滤）下规则越多越易跳焦
-                    LibraryBookTile(
-                        book = book,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusProperties {
-                                if (index % LIBRARY_GRID_COLUMNS == 0) {
-                                    left = FocusRequester.Cancel
-                                }
-                                if (index % LIBRARY_GRID_COLUMNS == LIBRARY_GRID_COLUMNS - 1) {
-                                    right = FocusRequester.Cancel
-                                }
-                            },
-                        onClick = { onBookClick(book) },
-                    )
-                }
-            }
-        }
-        }
+            bookTile = { book, tileModifier ->
+                LibraryBookTile(
+                    book = book,
+                    modifier = tileModifier,
+                    onClick = { onBookClick(book) },
+                )
+            },
+        )
     }
 
     LibrarySearchDialog(

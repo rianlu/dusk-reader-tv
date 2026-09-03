@@ -18,10 +18,11 @@
 
 ## 🔧 P1 结构治理（进行中）
 
-### P1-1 BooksGrid 容器组件（搬官方 MoviesRow 模式）
-- [ ] 新建 `presentation/common/BooksGrid.kt`：焦点治理内收（focusRestorer 恒组合锚点 + pivot spec + 可选 saveFocusedChild）
-- [ ] BookshelfScreen 网格切换为 BooksGrid，删除散落的网格焦点代码
-- [ ] 回归：网格四向 / 快速滚动 / 搜索过滤后焦点
+### P1-1 BooksGrid 容器组件 ✅ 已完成
+- [x] 新建 `presentation/common/BooksGrid.kt`：焦点治理内收（pivot spec + restorer 恒组合锚点 + 边界最小规则 + state 透传）
+- [x] BookshelfScreen 网格切换为 BooksGrid（tile 外观经 bookTile 参数注入 LibraryBookTile）
+- [x] 删除 BookshelfScreen 内的 pivot spec/LIBRARY_GRID_COLUMNS/grid 焦点代码
+- [ ] 回归：网格四向 / 快速滚动 / 搜索过滤后焦点（待实机）
 
 ### P1-2 筛选改 FilterChip 平铺行（删两个 StandardDialog）✅ 已完成
 - [x] Library 模式 toolbar：格式/排序改为 `tv.material3.FilterChip` 平铺（对齐官方 MovieFilterChipRow 模式）
@@ -66,6 +67,7 @@
 
 ## 变更日志
 
+- 2026-09-01 P1-1 完成：BooksGrid 容器组件，焦点治理内收（P1 收官）
 - 2026-09-01 P1-3 完成：SavedStateHandle+rememberSaveable 状态恢复
 - 2026-09-01 P1-2 完成：筛选/排序 FilterChip 平铺，删 LibraryOptionDialog
 - 2026-09-01 P0 完成（`0215550`）：四项根因修复 + 版本号协议废除
