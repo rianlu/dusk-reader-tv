@@ -19,7 +19,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -78,7 +77,6 @@ fun DashboardScreen(
 
     var isTopBarVisible by remember { mutableStateOf(true) }
     var isTopBarFocused by remember { mutableStateOf(false) }
-    var contentFocusRequestVersion by remember { mutableLongStateOf(0L) }
 
     var currentDestination: String? by remember { mutableStateOf(null) }
     val currentTopBarSelectedTabIndex by remember(currentDestination) {
@@ -156,7 +154,6 @@ fun DashboardScreen(
                     bottom = ParentPadding.calculateBottomPadding()
                 ),
             selectedTabIndex = currentTopBarSelectedTabIndex,
-            onContentFocusRequest = { contentFocusRequestVersion++ },
             onScreenSelection = { screen ->
                 val targetRoute = screen()
                 if (currentDestination != targetRoute) {
@@ -171,8 +168,6 @@ fun DashboardScreen(
             isTopBarVisible = isTopBarVisible,
             navController = navController,
             modifier = Modifier.offset(y = navHostTopPaddingDp),
-            contentFocusRequestVersion = contentFocusRequestVersion,
-            onRequestContentFocus = { contentFocusRequestVersion++ },
         )
     }
 }
@@ -219,8 +214,6 @@ private fun Body(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
     isTopBarVisible: Boolean = true,
-    contentFocusRequestVersion: Long = 0L,
-    onRequestContentFocus: () -> Unit = {},
 ) =
     NavHost(
         modifier = modifier,
@@ -236,38 +229,23 @@ private fun Body(
         composable(Screens.Home()) {
             BookshelfScreen(
                 onBookClick = { book -> openBookDetailsScreen(book.id) },
-                onGoTransfer = {
-                    onRequestContentFocus()
-                    navController.navigateTopLevel(Screens.Transfer)
-                },
-                onGoBookshelf = {
-                    onRequestContentFocus()
-                    navController.navigateTopLevel(Screens.Bookshelf)
-                },
                 onScroll = updateTopBarVisibility,
                 isTopBarVisible = isTopBarVisible,
                 mode = BookshelfScreenMode.Home,
-                requestInitialFocusVersion = contentFocusRequestVersion,
             )
         }
         composable(Screens.Bookshelf()) {
             BookshelfScreen(
                 onBookClick = { book -> openBookDetailsScreen(book.id) },
-                onGoTransfer = {
-                    onRequestContentFocus()
-                    navController.navigateTopLevel(Screens.Transfer)
-                },
-                onGoBookshelf = { },
                 onScroll = updateTopBarVisibility,
                 isTopBarVisible = isTopBarVisible,
                 mode = BookshelfScreenMode.Library,
-                requestInitialFocusVersion = contentFocusRequestVersion,
             )
         }
         composable(Screens.Transfer()) {
-            TransferScreen(requestInitialFocusVersion = contentFocusRequestVersion)
+            TransferScreen()
         }
         composable(Screens.Settings()) {
-            SettingsScreen(requestInitialFocusVersion = contentFocusRequestVersion)
+            SettingsScreen()
         }
     }

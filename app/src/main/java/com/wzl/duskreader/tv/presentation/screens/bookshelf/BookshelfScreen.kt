@@ -7,9 +7,6 @@
 package com.wzl.duskreader.tv.presentation.screens.bookshelf
 
 import android.view.KeyEvent
-import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.background
@@ -96,19 +93,26 @@ private const val LIBRARY_GRID_COLUMNS = 5
 private val BOOK_POSTER_ASPECT_RATIO = 3f / 4f
 
 /**
- * TV pivot 滚动:把聚焦行钉在视口约 35% 处。
- * 默认 BringIntoViewSpec 只在项贴边时才滚动,聚焦项落在视口边缘,
- * 下一行往往尚未组合,D-pad 焦点搜索找不到目标就跳到任意已组合项(表现为跳到第一/最后一个)。
- * pivot 让焦点行始终远离边缘,后续行提前组合,同时获得连续平滑的滚动手感。
+ * TV pivot 滚动：把聚焦行钉在视口约 30% 处（对齐 TvMaterialCatalog 的
+ * PositionFocusedItemInLazyLayout 实现公式）。默认策略下聚焦项贴边时下一行尚未组合，
+ * D-pad 焦点搜索落空导致跳焦；pivot 让后续行提前组合。
+ * 注意：不覆写 scrollAnimationSpec——默认弹簧动画支持连发按键时平滑重定向，
+ * 自定义 tween 每次按键都从静止重启，快速连按时滚动追不上焦点。
  */
-private val LibraryPivotBringIntoViewSpec = object : BringIntoViewSpec {
-    override val scrollAnimationSpec: AnimationSpec<Float> = tween(
-        durationMillis = 220,
-        easing = LinearOutSlowInEasing,
-    )
+private const val LIBRARY_PIVOT_PARENT_FRACTION = 0.3f
 
+private val LibraryPivotBringIntoViewSpec = object : BringIntoViewSpec {
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-        return offset - containerSize * 0.35f
+        val childSmallerThanParent = size <= containerSize
+        val initialTargetForLeadingEdge = LIBRARY_PIVOT_PARENT_FRACTION * containerSize
+        val spaceAvailableToShowItem = containerSize - initialTargetForLeadingEdge
+        val targetForLeadingEdge =
+            if (childSmallerThanParent && spaceAvailableToShowItem < size) {
+                containerSize - size
+            } else {
+                initialTargetForLeadingEdge
+            }
+        return offset - targetForLeadingEdge
     }
 }
 
@@ -120,12 +124,9 @@ enum class BookshelfScreenMode {
 @Composable
 fun BookshelfScreen(
     onBookClick: (book: Book) -> Unit,
-    onGoTransfer: () -> Unit,
-    onGoBookshelf: () -> Unit,
     onScroll: (isTopBarVisible: Boolean) -> Unit,
     isTopBarVisible: Boolean,
     mode: BookshelfScreenMode = BookshelfScreenMode.Home,
-    requestInitialFocusVersion: Long = 0L,
     viewModel: BookshelfScreenViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -146,7 +147,6 @@ fun BookshelfScreen(
                             onBookClick = onBookClick,
                             onScroll = onScroll,
                             isTopBarVisible = isTopBarVisible,
-                            requestInitialFocusVersion = requestInitialFocusVersion,
                         )
 
                         BookshelfScreenMode.Library -> LibraryBookshelf(
@@ -161,7 +161,6 @@ fun BookshelfScreen(
                             onSelectFormatFilter = viewModel::setFormatFilter,
                             onSelectLibrarySort = viewModel::setLibrarySort,
                             onScroll = onScroll,
-                            requestInitialFocusVersion = requestInitialFocusVersion,
                         )
                     }
                 }
@@ -177,7 +176,6 @@ private fun HomeBookshelf(
     onBookClick: (book: Book) -> Unit,
     onScroll: (isTopBarVisible: Boolean) -> Unit,
     isTopBarVisible: Boolean,
-    requestInitialFocusVersion: Long,
 ) {
     val childPadding = rememberChildPadding()
     val listState = rememberLazyListState()
@@ -194,9 +192,6 @@ private fun HomeBookshelf(
     LaunchedEffect(shouldShowTopBar) { onScroll(shouldShowTopBar) }
     LaunchedEffect(isTopBarVisible) {
         if (isTopBarVisible) listState.animateScrollToItem(0)
-    }
-    LaunchedEffect(requestInitialFocusVersion) {
-        if (requestInitialFocusVersion > 0) startRequester.requestFocusSafely()
     }
 
     LazyColumn(
@@ -235,14 +230,12 @@ private fun LibraryBookshelf(
     onSelectFormatFilter: (LibraryFormatFilter) -> Unit,
     onSelectLibrarySort: (LibrarySort) -> Unit,
     onScroll: (isTopBarVisible: Boolean) -> Unit,
-    requestInitialFocusVersion: Long,
 ) {
     val childPadding = rememberChildPadding()
     val gridState = rememberLazyGridState()
     val searchRequester = remember { FocusRequester() }
     val filterRequester = remember { FocusRequester() }
     val sortRequester = remember { FocusRequester() }
-    var gridHasFocus by remember { mutableStateOf(false) }
     var showSearchDialog by remember { mutableStateOf(false) }
     var showFilterDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
@@ -253,12 +246,10 @@ private fun LibraryBookshelf(
                 gridState.firstVisibleItemScrollOffset < LIBRARY_TOP_BAR_HIDE_THRESHOLD_PX
         }
     }
-    LaunchedEffect(shouldShowTopBar, gridHasFocus) {
-        onScroll(shouldShowTopBar && !gridHasFocus)
-    }
-    LaunchedEffect(requestInitialFocusVersion) {
-        if (requestInitialFocusVersion > 0) searchRequester.requestFocusSafely()
-    }
+    // 顶栏显隐纯滚动驱动（对齐官方 HomeScreen 模式）：不掺入焦点状态，
+    // 否则网格聚焦→顶栏收起→拉回顶部与 pivot 滚动互相打架，产生布局抖动/跳行
+    LaunchedEffect(shouldShowTopBar) { onScroll(shouldShowTopBar) }
+    // 空结果时聚焦搜索入口（恒组合，安全）；对话框弹出时不抢焦点
     LaunchedEffect(libraryBooks.isEmpty(), showSearchDialog) {
         if (libraryBooks.isEmpty() && !showSearchDialog) searchRequester.requestFocusSafely()
     }
@@ -302,10 +293,9 @@ private fun LibraryBookshelf(
             state = gridState,
             modifier = Modifier
                 .fillMaxSize()
-                .onFocusChanged { gridHasFocus = it.hasFocus }
-                // 无回退目标的 focusRestorer:显式回退到某个网格项的 FocusRequester
-                // 在该项被 Lazy 回收后会因"未附着"直接崩溃(快速滚动场景)
-                .focusRestorer(),
+                // restorer fallback 指向 toolbar 的搜索按钮（恒组合，不在 Lazy 容器内），
+                // 焦点回到网格时优先恢复上次聚焦项，被回收时退到搜索栏而不会跳到任意项
+                .focusRestorer { searchRequester },
             contentPadding = PaddingValues(
                 start = childPadding.start,
                 top = 10.dp,
@@ -322,6 +312,9 @@ private fun LibraryBookshelf(
                         .padding(horizontal = 6.dp, vertical = 6.dp),
                     contentAlignment = Alignment.TopCenter,
                 ) {
+                    // per-item 规则最小化（对齐官方 CategoriesScreen：仅封网格左/右边界，
+                    // 防跨行逃逸）；首行 up 与末行 down 交给默认 2D 焦点搜索，
+                    // 动态列表（搜索/过滤）下规则越多越易跳焦
                     LibraryBookTile(
                         book = book,
                         modifier = Modifier
@@ -330,16 +323,8 @@ private fun LibraryBookshelf(
                                 if (index % LIBRARY_GRID_COLUMNS == 0) {
                                     left = FocusRequester.Cancel
                                 }
-                                if (index % LIBRARY_GRID_COLUMNS == LIBRARY_GRID_COLUMNS - 1 ||
-                                    index == libraryBooks.lastIndex
-                                ) {
+                                if (index % LIBRARY_GRID_COLUMNS == LIBRARY_GRID_COLUMNS - 1) {
                                     right = FocusRequester.Cancel
-                                }
-                                if (index < LIBRARY_GRID_COLUMNS) {
-                                    up = searchRequester
-                                }
-                                if (index + LIBRARY_GRID_COLUMNS > libraryBooks.lastIndex) {
-                                    down = FocusRequester.Cancel
                                 }
                             },
                         onClick = { onBookClick(book) },
@@ -750,8 +735,9 @@ private fun LibraryBookTile(
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
                 shape = MaterialTheme.shapes.large,
             ),
+            // 2dp 聚焦白描边（DESIGN.md §2.2 全局签名，与阅读页/按钮/设置行统一）
             focusedBorder = Border(
-                border = BorderStroke(3.dp, Color.White),
+                border = BorderStroke(2.dp, Color.White),
                 shape = MaterialTheme.shapes.large,
             ),
         ),

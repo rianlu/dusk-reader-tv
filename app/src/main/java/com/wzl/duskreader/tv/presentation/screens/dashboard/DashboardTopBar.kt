@@ -37,6 +37,8 @@ import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Tab
 import androidx.tv.material3.TabRow
 import androidx.tv.material3.Text
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
 import com.wzl.duskreader.tv.presentation.screens.Screens
 import com.wzl.duskreader.tv.presentation.theme.IconSize
 import com.wzl.duskreader.tv.presentation.theme.JetStreamCardShape
@@ -54,10 +56,10 @@ fun DashboardTopBar(
     selectedTabIndex: Int,
     screens: List<Screens> = TopBarTabs,
     focusRequesters: List<FocusRequester> = remember { TopBarFocusRequesters },
-    onContentFocusRequest: () -> Unit,
     onScreenSelection: (screen: Screens) -> Unit,
 ) {
     val sectionLabel = screens.getOrNull(selectedTabIndex)?.sectionLabel() ?: "本地书库"
+    val focusManager = LocalFocusManager.current
     Box(modifier = modifier) {
         Surface(
             modifier = Modifier
@@ -112,7 +114,9 @@ fun DashboardTopBar(
                                         .focusRequester(focusRequesters[index]),
                                     selected = index == selectedTabIndex,
                                     onFocus = { onScreenSelection(screen) },
-                                    onClick = onContentFocusRequest,
+                                    // 点击已选中 tab：焦点直接下移进内容区（官方 JetStream 模式），
+                                    // 取代已废弃的版本号首焦协议
+                                    onClick = { focusManager.moveFocus(FocusDirection.Down) },
                                 ) {
                                     TabContent(screen = screen)
                                 }

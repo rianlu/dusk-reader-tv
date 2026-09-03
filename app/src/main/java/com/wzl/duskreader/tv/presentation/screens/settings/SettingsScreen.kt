@@ -73,7 +73,6 @@ private enum class SettingsActionType {
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
-    requestInitialFocusVersion: Long = 0L,
     viewModel: SettingsScreenViewModel = hiltViewModel(),
 ) {
     val rescanState by viewModel.rescanState.collectAsStateWithLifecycle()
@@ -107,9 +106,7 @@ fun SettingsScreen(
         )
     }
 
-    LaunchedEffect(requestInitialFocusVersion) {
-        if (requestInitialFocusVersion > 0) firstItemRequester.requestFocusSafely()
-    }
+    LaunchedEffect(Unit) { firstItemRequester.requestFocusSafely() }
 
     DuskScreenBackground(modifier = modifier) {
         LazyColumn(

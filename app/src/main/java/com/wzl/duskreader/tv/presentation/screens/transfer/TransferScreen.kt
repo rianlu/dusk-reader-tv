@@ -27,9 +27,7 @@ import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -57,48 +55,30 @@ import com.wzl.duskreader.tv.presentation.screens.dashboard.rememberChildPadding
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 @Composable
 fun TransferScreen(
     modifier: Modifier = Modifier,
-    requestInitialFocusVersion: Long = 0L,
     viewModel: TransferScreenViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val childPadding = rememberChildPadding()
     val primaryActionRequester = remember { FocusRequester() }
-    var handledFocusRequestVersion by rememberSaveable { mutableLongStateOf(0L) }
-    var actionFocusRequestVersion by rememberSaveable { mutableLongStateOf(0L) }
-    var handledActionFocusRequestVersion by rememberSaveable { mutableLongStateOf(0L) }
-
-    LaunchedEffect(requestInitialFocusVersion, state) {
-        if (requestInitialFocusVersion <= handledFocusRequestVersion) return@LaunchedEffect
+    // 状态就绪后聚焦主操作按钮（官方模式：状态驱动首焦，取代版本号协议）。
+    // Idle/Ready/Unavailable 三态都有主按钮；Loading 无可聚焦目标，等待就绪后 effect 重触发。
+    // 点击「开启/重启/重新检测」后状态变化也会重进此 effect，主按钮保持焦点。
+    LaunchedEffect(state) {
         when (state) {
             TransferScreenUiState.Idle,
             is TransferScreenUiState.Ready,
             is TransferScreenUiState.Unavailable -> {
+                delay(50)
                 primaryActionRequester.requestFocusSafely()
-                handledFocusRequestVersion = requestInitialFocusVersion
             }
+
             TransferScreenUiState.Loading -> Unit
         }
-    }
-
-    LaunchedEffect(actionFocusRequestVersion, state) {
-        if (actionFocusRequestVersion <= handledActionFocusRequestVersion) return@LaunchedEffect
-        when (state) {
-            is TransferScreenUiState.Ready,
-            is TransferScreenUiState.Unavailable -> {
-                primaryActionRequester.requestFocusSafely()
-                handledActionFocusRequestVersion = actionFocusRequestVersion
-            }
-            TransferScreenUiState.Idle,
-            TransferScreenUiState.Loading -> Unit
-        }
-    }
-
-    fun requestActionFocusAfterStateChange() {
-        actionFocusRequestVersion++
     }
 
     DuskScreenBackground(modifier = modifier) {
@@ -122,7 +102,6 @@ fun TransferScreen(
                 TransferScreenUiState.Idle -> TransferIdlePanel(
                     buttonRequester = primaryActionRequester,
                     onStart = {
-                        requestActionFocusAfterStateChange()
                         viewModel.startTransfer()
                     },
                 )
@@ -135,20 +114,14 @@ fun TransferScreen(
                     qrCode = current.qrCode,
                     lastUploadText = formatLastUpload(current.lastUploadMessage, current.lastUploadAtMillis),
                     buttonRequester = primaryActionRequester,
-                    onRestart = {
-                        requestActionFocusAfterStateChange()
-                        viewModel.refresh()
-                    },
+                    onRestart = { viewModel.refresh() },
                 )
 
                 is TransferScreenUiState.Unavailable -> TransferUnavailablePanel(
                     message = current.message,
                     lastUploadText = formatLastUpload(current.lastUploadMessage, current.lastUploadAtMillis),
                     buttonRequester = primaryActionRequester,
-                    onRefresh = {
-                        requestActionFocusAfterStateChange()
-                        viewModel.refresh()
-                    },
+                    onRefresh = { viewModel.refresh() },
                 )
             }
         }
