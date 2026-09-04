@@ -91,6 +91,9 @@ fun BooksGrid(
     modifier: Modifier = Modifier,
     state: LazyGridState = rememberLazyGridState(),
     contentPadding: PaddingValues = PaddingValues(bottom = 132.dp),
+    /** 首行 UP 的定向目标（toolbar 首个 chip/搜索按钮）。恒组合不回收，
+     *  2D 搜索在顶栏显隐动画中不可靠，显式定向保证网格→toolbar 不飞顶栏 */
+    upRequester: FocusRequester? = null,
     bookTile: @Composable (Book, Modifier) -> Unit = { book, tileModifier ->
         BookTile(book = book, modifier = tileModifier, onClick = { onBookClick(book) })
     },
@@ -128,6 +131,11 @@ fun BooksGrid(
                                 }
                                 if (index % BOOKS_GRID_COLUMNS == BOOKS_GRID_COLUMNS - 1) {
                                     right = FocusRequester.Cancel
+                                }
+                                // 首行显式定向 toolbar（2D 搜索在顶栏动画中不可靠，
+                                // 显式规则防「网格 UP 越过 toolbar 飞顶栏」）
+                                if (index < BOOKS_GRID_COLUMNS && upRequester != null) {
+                                    up = upRequester
                                 }
                             },
                     )

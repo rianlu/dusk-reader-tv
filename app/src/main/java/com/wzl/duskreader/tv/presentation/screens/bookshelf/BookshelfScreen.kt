@@ -280,6 +280,7 @@ private fun LibraryBookshelf(
             onBookClick = onBookClick,
             modifier = Modifier.fillMaxSize(),
             state = gridState,
+            upRequester = firstChipRequester,
             contentPadding = PaddingValues(
                 start = childPadding.start,
                 top = 10.dp,
