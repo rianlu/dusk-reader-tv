@@ -7,7 +7,14 @@
 package com.wzl.duskreader.tv.presentation.screens.bookshelf
 
 import android.view.KeyEvent
+import androidx.compose.animation.AnimatedContentScope
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -41,7 +48,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -62,6 +68,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Carousel
+import androidx.tv.material3.CarouselDefaults
+import androidx.tv.material3.CarouselState
 import androidx.tv.material3.FilterChip
 import androidx.tv.material3.FilterChipDefaults
 import androidx.tv.material3.MaterialTheme
@@ -83,8 +92,16 @@ import com.wzl.duskreader.tv.presentation.utils.requestFocusSafely
 import com.wzl.duskreader.tv.tvmaterial.StandardDialog
 
 private const val HOME_TOP_BAR_HIDE_THRESHOLD_PX = 300
+private const val CAROUSEL_ITEM_COUNT = 5
+private const val CAROUSEL_FADE_MS = 400
 private const val LIBRARY_TOP_BAR_HIDE_THRESHOLD_PX = 100
 private val BOOK_POSTER_ASPECT_RATIO = 3f / 4f
+
+// 轮播位置持久化（官方 JetStream CarouselSaver 模式，进程重建恢复轮播页）
+private val CarouselSaver = Saver<CarouselState, Int>(
+    save = { it.activeItemIndex },
+    restore = { CarouselState(it) },
+)
 
 enum class BookshelfScreenMode {
     Home,
@@ -150,8 +167,10 @@ private fun HomeBookshelf(
     val childPadding = rememberChildPadding()
     val listState = rememberLazyListState()
     val startRequester = remember { FocusRequester() }
-    val featuredBook = remember(recentBooks, allBooks) { recentBooks.firstOrNull() ?: allBooks.first() }
-    val hasRecentBook = remember(recentBooks) { recentBooks.isNotEmpty() }
+    // 轮播数据：最近阅读优先，不足补全量书库（上限 5 本，与网格首行等量）
+    val carouselBooks = remember(recentBooks, allBooks) {
+        (recentBooks.ifEmpty { allBooks }).take(CAROUSEL_ITEM_COUNT)
+    }
 
     val shouldShowTopBar by remember {
         derivedStateOf {
@@ -176,12 +195,12 @@ private fun HomeBookshelf(
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         item {
-            ContinueReadingHero(
-                book = featuredBook,
+            ContinueReadingCarousel(
+                books = carouselBooks,
                 totalCount = allBooks.size,
-                hasRecentBook = hasRecentBook,
+                hasRecentBook = recentBooks.isNotEmpty(),
                 startRequester = startRequester,
-                onBookClick = { onBookClick(featuredBook) },
+                onBookClick = onBookClick,
             )
         }
     }
@@ -285,60 +304,91 @@ private fun LibraryBookshelf(
     )
 }
 
+/**
+ * 首页轮播 Hero（官方 JetStream FeaturedMoviesCarousel 模式）：
+ * 最近阅读的书横向轮播，D-pad 左右切换（Carousel 内建），选中键直达阅读。
+ * 状态经 CarouselSaver 持久化（进程重建恢复轮播位置）。
+ */
 @Composable
-private fun ContinueReadingHero(
-    book: Book,
+private fun ContinueReadingCarousel(
+    books: List<Book>,
     totalCount: Int,
     hasRecentBook: Boolean,
     startRequester: FocusRequester,
-    onBookClick: () -> Unit,
+    onBookClick: (book: Book) -> Unit,
 ) {
-    Row(
+    val carouselState = rememberSaveable(saver = CarouselSaver) { CarouselState(0) }
+
+    Carousel(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(34.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        BookCoverWithBadges(
-            book = book,
-            modifier = Modifier
-                .width(210.dp)
-                .aspectRatio(BOOK_POSTER_ASPECT_RATIO),
-        )
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+        itemCount = books.size,
+        carouselState = carouselState,
+        carouselIndicator = {
+            CarouselDefaults.IndicatorRow(
+                itemCount = books.size,
+                activeItemIndex = carouselState.activeItemIndex,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 4.dp),
+            )
+        },
+        contentTransformStartToEnd = fadeIn(tween(CAROUSEL_FADE_MS)) togetherWith fadeOut(tween(CAROUSEL_FADE_MS)),
+        contentTransformEndToStart = fadeIn(tween(CAROUSEL_FADE_MS)) togetherWith fadeOut(tween(CAROUSEL_FADE_MS)),
+    ) { index ->
+        val book = books[index]
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(34.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = if (hasRecentBook) "最近阅读" else "开始第一本书",
-                style = MaterialTheme.typography.labelLarge,
-                color = Color.White.copy(alpha = 0.58f),
+            BookCoverWithBadges(
+                book = book,
+                modifier = Modifier
+                    .width(210.dp)
+                    .aspectRatio(BOOK_POSTER_ASPECT_RATIO),
             )
-            Text(
-                text = book.title,
-                style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Bold),
-                color = Color.White,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            BookMetaChips(book = book)
-            Text(
-                text = continueSubtitle(book, totalCount),
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White.copy(alpha = 0.72f),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            ReadingProgressBar(
-                progress = if (book.hasReadingHistory()) book.progressRatio() else 0f,
-                modifier = Modifier.widthIn(min = 360.dp, max = 560.dp),
-            )
-            Row(modifier = Modifier.focusGroup()) {
-                DuskTvButton(
-                    text = if (book.hasReadingHistory()) "继续阅读" else "开始阅读",
-                    icon = Icons.Outlined.AutoStories,
-                    modifier = Modifier.focusRequester(startRequester),
-                    onClick = onBookClick,
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text(
+                    text = if (hasRecentBook) "最近阅读" else "开始第一本书",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White.copy(alpha = 0.58f),
                 )
+                Text(
+                    text = book.title,
+                    style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                BookMetaChips(book = book)
+                Text(
+                    text = continueSubtitle(book, totalCount),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White.copy(alpha = 0.72f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                ReadingProgressBar(
+                    progress = if (book.hasReadingHistory()) book.progressRatio() else 0f,
+                    modifier = Modifier.widthIn(min = 360.dp, max = 560.dp),
+                )
+                Row(modifier = Modifier.focusGroup()) {
+                    DuskTvButton(
+                        text = if (book.hasReadingHistory()) "继续阅读" else "开始阅读",
+                        icon = Icons.Outlined.AutoStories,
+                        modifier = Modifier
+                            .focusRequester(startRequester)
+                            // 轮播边界封口：Hero 区左右不再外溢（由 Carousel 内建切换承接）
+                            .focusProperties {
+                                left = FocusRequester.Cancel
+                                right = FocusRequester.Cancel
+                            },
+                        onClick = { onBookClick(book) },
+                    )
+                }
             }
         }
     }
