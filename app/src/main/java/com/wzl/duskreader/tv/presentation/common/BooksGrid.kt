@@ -102,6 +102,10 @@ fun BooksGrid(
             gridItemsIndexed(books, key = { _, book -> book.id }) { index, book ->
                 Box(
                     modifier = Modifier
+                        // item 级重排/增删动画（foundation 1.7）：
+                        // 搜索/筛选/排序切换时书位平滑过渡而非瞬变（官方 MoviesRow 用
+                        // AnimatedContent 包行实现同目的，网格场景对应物是 animateItem）
+                        .animateItem()
                         .fillMaxWidth()
                         .padding(horizontal = 6.dp, vertical = 6.dp),
                     contentAlignment = Alignment.TopCenter,
