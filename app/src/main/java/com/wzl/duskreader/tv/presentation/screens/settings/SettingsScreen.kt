@@ -285,19 +285,6 @@ private fun PrimaryPanel(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SecondaryPanel(content: @Composable () -> Unit) {
-    Surface(
-        colors = SurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.045f)),
-        shape = MaterialTheme.shapes.extraLarge,
-        border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)), shape = MaterialTheme.shapes.extraLarge),
-    ) {
-        Box(modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
-            content()
-        }
-    }
-}
-
-@Composable
 private fun PageHeader(
     eyebrow: String,
     title: String,

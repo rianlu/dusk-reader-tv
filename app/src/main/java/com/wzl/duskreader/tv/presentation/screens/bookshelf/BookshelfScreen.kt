@@ -783,25 +783,6 @@ private fun ReadingProgressBar(
 }
 
 @Composable
-private fun SectionHeader(
-    title: String,
-    subtitle: String,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
-            color = Color.White,
-        )
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.58f),
-        )
-    }
-}
-
-@Composable
 private fun DuskPageBackground(content: @Composable () -> Unit) {
     Box(
         modifier = Modifier

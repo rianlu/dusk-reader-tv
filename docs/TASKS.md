@@ -39,7 +39,7 @@
 
 ## 🧹 P2 清理与体验（未开始）
 
-- [ ] 删死代码：BookCard / SectionHeader / SecondaryPanel / ModifierUtils 死函数（focusOnInitialVisibility、createInitialFocusRestorerModifiers、ifElse）
+- [x] 删死代码：BookCard / SectionHeader / SecondaryPanel / ModifierUtils 死函数（focusOnInitialVisibility、createInitialFocusRestorerModifiers、ifElse）
 - [ ] 首页 Hero 换官方 Carousel（CarouselSaver 模式）
 - [ ] 列表数据变化 AnimatedContent 过渡（搜索过滤/排序切换）
 - [ ] 详情页主按钮 BringIntoViewRequester 聚焦滚入
@@ -67,6 +67,7 @@
 
 ## 变更日志
 
+- 2026-09-01 P2-1 完成：死代码清理（BookCard/SectionHeader/SecondaryPanel/ModifierUtils 六个死函数）
 - 2026-09-01 P1-1 完成：BooksGrid 容器组件，焦点治理内收（P1 收官）
 - 2026-09-01 P1-3 完成：SavedStateHandle+rememberSaveable 状态恢复
 - 2026-09-01 P1-2 完成：筛选/排序 FilterChip 平铺，删 LibraryOptionDialog
