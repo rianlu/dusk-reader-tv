@@ -40,10 +40,11 @@
 ## 🧹 P2 清理与体验（未开始）
 
 - [x] 删死代码：BookCard / SectionHeader / SecondaryPanel / ModifierUtils 死函数（focusOnInitialVisibility、createInitialFocusRestorerModifiers、ifElse）
-- [ ] 首页 Hero 换官方 Carousel（CarouselSaver 模式）
+- [x] 首页 Hero 换官方 Carousel：最近阅读轮播（D-pad 左右切书、内建自动轮播、CarouselSaver 状态恢复、400ms fade 过渡）（`603b21f`）
 - [x] 网格 item 级过渡：BooksGrid 加 Modifier.animateItem()（搜索/筛选/排序切换书位平滑过渡）
 - [x] 详情页 BringIntoViewRequester：核实不需要——暮阅详情页是整屏居中布局不滚动（官方 MovieDetails 用它是因为 432dp 固定高度可滚），跳过
-- [ ] stash@{0} 清理（P0 验证通过后 drop）
+- [ ] stash@{0} 清理（P0 实机验证通过后 drop）
+- [x] P2 全部完成（`603b21f`）：死代码清理 / Carousel / animateItem / BringIntoView 核实
 
 ## 🏗️ P3 架构卫生（未开始）
 
@@ -67,6 +68,7 @@
 
 ## 变更日志
 
+- 2026-09-01 P2 收官（`603b21f`）：Hero→Carousel，P2 四项全部完成
 - 2026-09-01 P2-3 完成：网格 animateItem 过渡；详情页 BringIntoView 核实为不适用
 - 2026-09-01 P2-1 完成：死代码清理（BookCard/SectionHeader/SecondaryPanel/ModifierUtils 六个死函数）
 - 2026-09-01 P1-1 完成：BooksGrid 容器组件，焦点治理内收（P1 收官）
