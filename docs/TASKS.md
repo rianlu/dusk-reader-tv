@@ -48,9 +48,9 @@
 
 ## 🏗️ P3 架构卫生（未开始）
 
-- [ ] DuskColors 常量沉淀（渐进替换散落 Color.White.copy）
-- [ ] 扫描入口单 owner（scanLocalStorage 四处调用收敛，加互斥）
-- [ ] colorScheme 决策：继续硬编码 or token 化（DESIGN.md §10-2）
+- [x] DuskColors 常量沉淀（`theme/DuskColors.kt`：聚焦签名/九级阶梯/近黑铬层/背景/强调色 26 个 token；BooksGrid、DuskTvButton 已迁移，旧文件渐进迁移）
+- [x] 扫描入口互斥（BookRepositoryImpl scanMutex.withLock——四处调用方并发扫描不再 Room 写竞争）
+- [ ] colorScheme 决策：继续硬编码 or token 化（DESIGN.md §10-2，倾向保持 DuskColors 硬编码 + 废弃 theme/Theme.kt 的空转 darkColorScheme）
 
 ---
 
@@ -68,6 +68,7 @@
 
 ## 变更日志
 
+- 2026-09-01 P3 主体完成：DuskColors token 沉淀 + 扫描互斥
 - 2026-09-01 P2 收官（`603b21f`）：Hero→Carousel，P2 四项全部完成
 - 2026-09-01 P2-3 完成：网格 animateItem 过渡；详情页 BringIntoView 核实为不适用
 - 2026-09-01 P2-1 完成：死代码清理（BookCard/SectionHeader/SecondaryPanel/ModifierUtils 六个死函数）

@@ -21,9 +21,8 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import com.wzl.duskreader.tv.presentation.theme.DuskColors
 
-private val DuskButtonBorderColor = Color.White.copy(alpha = 0.18f)
-private val DuskButtonFocusColor = Color.White
 
 enum class DuskTvButtonStyle {
     Primary,
@@ -40,7 +39,7 @@ fun DuskTvButton(
     contentDescription: String? = null,
 ) {
     val containerColor = when (style) {
-        DuskTvButtonStyle.Primary -> Color.White.copy(alpha = 0.16f)
+        DuskTvButtonStyle.Primary -> DuskColors.SelectedContainer
         DuskTvButtonStyle.Secondary -> Color.White.copy(alpha = 0.08f)
     }
 
@@ -51,21 +50,21 @@ fun DuskTvButton(
         colors = ClickableSurfaceDefaults.colors(
             containerColor = containerColor,
             contentColor = Color.White,
-            focusedContainerColor = DuskButtonFocusColor,
-            focusedContentColor = Color.Black,
+            focusedContainerColor = DuskColors.FocusContainer,
+            focusedContentColor = DuskColors.FocusContent,
         ),
         border = ClickableSurfaceDefaults.border(
             border = Border(
-                border = BorderStroke(1.dp, DuskButtonBorderColor),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
                 shape = MaterialTheme.shapes.large,
             ),
             focusedBorder = Border(
-                border = BorderStroke(2.dp, DuskButtonFocusColor),
+                border = BorderStroke(2.dp, DuskColors.FocusBorder),
                 shape = MaterialTheme.shapes.large,
             ),
         ),
         glow = ClickableSurfaceDefaults.glow(
-            focusedGlow = Glow(elevation = 16.dp, elevationColor = DuskButtonFocusColor.copy(alpha = 0.16f)),
+            focusedGlow = Glow(elevation = 16.dp, elevationColor = Color.White.copy(alpha = 0.16f)),
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
     ) {

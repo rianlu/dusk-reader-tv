@@ -8,6 +8,8 @@ import com.wzl.duskreader.tv.data.local.BookChapterDao
 import com.wzl.duskreader.tv.data.local.BookDao
 import com.wzl.duskreader.tv.data.metadata.BookMetadataResolver
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -46,7 +48,11 @@ class BookRepositoryImpl @Inject constructor(
         bookDao.deleteBook(book)
     }
 
-    override suspend fun scanLocalStorage(): Int = withContext(Dispatchers.IO) {
+    /** 扫描互斥锁：调用方有 4 处（权限授予/上传触发/设置页/书库页），并发扫描会造成 Room 写竞争 */
+    private val scanMutex = Mutex()
+
+    override suspend fun scanLocalStorage(): Int = scanMutex.withLock {
+        withContext(Dispatchers.IO) {
         val bookDir = resolveBookDir(createIfMissing = true) ?: return@withContext 0
         removeLegacyDefaultBook(bookDir)
         val files = bookDir.listFiles()
@@ -103,6 +109,7 @@ class BookRepositoryImpl @Inject constructor(
                 "updated=${booksToUpdate.size}, removed=${staleBooks.size}",
         )
         importedCount
+        }
     }
 
     private fun buildImportedBook(

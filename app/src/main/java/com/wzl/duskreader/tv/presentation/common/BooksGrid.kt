@@ -27,9 +27,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Column
+import androidx.tv.material3.Border
+import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Surface
+import androidx.tv.material3.Text
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.wzl.duskreader.tv.data.entities.Book
+import com.wzl.duskreader.tv.presentation.theme.DuskColors
 
 /** 书库网格列数 */
 const val BOOKS_GRID_COLUMNS = 5
@@ -139,44 +147,37 @@ private fun BookTile(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    androidx.tv.material3.Surface(
+    Surface(
         onClick = onClick,
         modifier = modifier,
-        shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(MaterialTheme.shapes.large),
-        colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
-            containerColor = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.045f),
-            focusedContainerColor = androidx.compose.ui.graphics.Color.White,
+        shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.large),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = DuskColors.CardContainerSubtle,
+            focusedContainerColor = DuskColors.FocusContainer,
         ),
-        border = androidx.tv.material3.ClickableSurfaceDefaults.border(
-            border = androidx.tv.material3.Border(
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    androidx.compose.ui.graphics.Color.White.copy(alpha = 0.10f),
-                ),
+        border = ClickableSurfaceDefaults.border(
+            border = Border(
+                border = BorderStroke(1.dp, DuskColors.BorderResting),
                 shape = MaterialTheme.shapes.large,
             ),
-            focusedBorder = androidx.tv.material3.Border(
-                border = androidx.compose.foundation.BorderStroke(
-                    2.dp,
-                    androidx.compose.ui.graphics.Color.White,
-                ),
+            focusedBorder = Border(
+                border = BorderStroke(2.dp, DuskColors.FocusBorder),
                 shape = MaterialTheme.shapes.large,
             ),
         ),
-        scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
     ) {
-        androidx.compose.foundation.layout.Column(
+        Column(
             modifier = Modifier.padding(6.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp),
         ) {
             BookCoverWithChip(book = book, modifier = Modifier.fillMaxWidth())
-            // 书名与进度条由调用方更了解排版上下文，这里给默认实现
-            androidx.tv.material3.Text(
+            Text(
                 text = book.title,
                 style = MaterialTheme.typography.titleSmall,
-                color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.86f),
+                color = DuskColors.TextStrong,
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
