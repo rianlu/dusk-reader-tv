@@ -15,6 +15,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -59,6 +60,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -564,9 +566,17 @@ private fun LibrarySearchDialog(
     val inputRequester = remember { FocusRequester() }
     val confirmRequester = remember { FocusRequester() }
     var inputFocused by remember { mutableStateOf(false) }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     LaunchedEffect(showDialog) {
-        if (showDialog) inputRequester.requestFocusSafely()
+        // 弹窗首焦给「完成」按钮而非输入框：TV 输入框聚焦即弹 IME，
+        // Gboard 会拦截全部 D-pad 方向键（实测复现），焦点会被钉死在输入框。
+        // dialogFocusable 在组合期把焦点给第一个可聚焦子项（BasicTextField），
+        // 这里等一帧再改判到完成按钮。
+        if (showDialog) {
+            withFrameNanos { }
+            confirmRequester.requestFocusSafely()
+        }
     }
 
     StandardDialog(
@@ -580,16 +590,32 @@ private fun LibrarySearchDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(inputRequester)
-                    .onFocusChanged { inputFocused = it.hasFocus }
+                    .onFocusChanged { state ->
+                        inputFocused = state.hasFocus
+                        // 输入框聚焦/失焦都收起 IME：Gboard 一旦弹出就拦截全部
+                        // D-pad 方向键（实测复现,焦点钉死在输入框,DOWN 逃逸失效）。
+                        // TV 搜索词主要来自遥控器数字键/语音;物理键盘输入不受影响,
+                        // 需要软键盘时可点按输入框区域唤出。
+                        keyboardController?.hide()
+                    }
                     .focusProperties {
                         left = FocusRequester.Cancel
                         right = FocusRequester.Cancel
+                        // DOWN/UP 显式定向：IME 拦截时 Compose 收不到按键，
+                        // 但部分输入法会放行方向键，此时定向到完成按钮
+                        down = confirmRequester
                     }
                     .onPreviewKeyEvent { event ->
                         when (event.nativeKeyEvent.keyCode) {
                             KeyEvent.KEYCODE_DPAD_DOWN,
                             KeyEvent.KEYCODE_SYSTEM_NAVIGATION_DOWN -> {
-                                if (event.type == KeyEventType.KeyDown) confirmRequester.requestFocusSafely()
+                                if (event.type == KeyEventType.KeyDown) {
+                                    // 收起 IME 并把焦点交给完成按钮（双保险：
+                                    // focusProperties.down 覆盖放行方向键的输入法，
+                                    // 这里覆盖被 Compose 收到的方向键）
+                                    keyboardController?.hide()
+                                    confirmRequester.requestFocusSafely()
+                                }
                                 true
                             }
 
